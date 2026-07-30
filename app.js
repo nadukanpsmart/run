@@ -409,8 +409,9 @@ function renderSales(bills) {
             if (bill.customer_phone) {
                 waAction = `<button onclick="sendWhatsAppReceipt('${bill.id}')" class="action-btn small" style="background:#25D366; color:white; border-color:#25D366; margin-right:4px;">WhatsApp</button>`;
             }
+            let printAction = `<button onclick="reprintBill('${bill.id}')" class="action-btn small" style="background:#4b5563; color:white; border-color:#4b5563; margin-right:4px;">Print</button>`;
             let undoAction = `<button onclick="openUndoModal('${bill.id}', '${bill.bill_number || ''}')" class="action-btn small danger">Undo</button>`;
-            actionHtml = waAction + undoAction;
+            actionHtml = waAction + printAction + undoAction;
         }
 
         tr.innerHTML = `
@@ -426,6 +427,37 @@ function renderSales(bills) {
         `;
         tbody.appendChild(tr);
     });
+}
+
+
+async function reprintBill(billId) {
+    if (!supabase) return;
+    
+    try {
+        // Fetch bill details
+        const { data: bill, error: billError } = await supabase
+            .from('bills')
+            .select('*, owners(full_name)')
+            .eq('id', billId)
+            .single();
+
+        if (billError || !bill) throw billError;
+
+        // Fetch bill items
+        const { data: items, error: itemsError } = await supabase
+            .from('bill_items')
+            .select('*')
+            .eq('bill_id', billId);
+
+        if (itemsError || !items) throw itemsError;
+
+        // Show the preview modal
+        showBillPreview(bill, items);
+        
+    } catch (err) {
+        console.error('Error fetching bill for reprint:', err);
+        alert('Could not load bill details for printing.');
+    }
 }
 
 async function viewBillDetails(billId) {
