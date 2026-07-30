@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Na Dukan</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Cropper.js -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+</head>
+
+<body>
+    <div id="auth-wrapper" class="auth-wrapper">
+        <div class="auth-card">
+            <h1 style="text-align: center; margin-bottom: 1.5rem;">Na <span class="highlight">Dukan</span></h1>
+
+            <!-- Login Form -->
+            <div id="login-view">
+                <h2 class="auth-title">Owner & Employee Sign In</h2>
+
+                <div class="form-group">
+                    <label>Email or Phone</label>
+                    <input type="text" id="login-identifier" placeholder="Email / Phone">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="Password">
+                </div>
+                <button class="auth-btn" onclick="handleLogin()">Sign In</button>
+                <p class="auth-footer">New Owner? <span onclick="showSignup()">Create Account</span></p>
+            </div>
+
+            <!-- Signup Form -->
+            <div id="signup-view" class="hidden">
+                <h2 class="auth-title">Register Business</h2>
+
+                <!-- Step 1: Credentials -->
+                <div id="signup-step-1">
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="reg-email" placeholder="you@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="reg-pass" placeholder="Create Password">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" id="reg-confirm" placeholder="Repeat Password">
+                    </div>
+                    <button class="auth-btn" onclick="initiateSignup()">Verify & Continue</button>
+                </div>
+
+                <!-- Step 2: OTP Verification -->
+                <div id="signup-step-otp" class="hidden">
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        We sent a code to your email.
+                    </p>
+                    <div class="form-group">
+                        <label>Email OTP</label>
+                        <input type="text" id="otp-user" placeholder="Enter Code">
+                    </div>
+
+                    <div class="dev-otp-section"
+                        style="margin: 1rem 0; padding: 1rem; background: #FFFBEB; border-radius: 8px;">
+                        <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; font-weight:600;">Developer
+                            Authorization</label>
+                        <button class="action-btn small" onclick="requestDevOtp()" style="margin-bottom:0.5rem;">Send
+                            Dev OTP</button>
+                        <input type="text" id="otp-dev" placeholder="Enter Dev Code">
+                    </div>
+
+                    <button class="auth-btn" onclick="verifyOtps()">Validate Codes</button>
+                </div>
+
+                <!-- Step 3: Business Details -->
+                <div id="signup-step-details" class="hidden">
+                    <div class="form-group">
+                        <input type="text" id="reg-fullname" placeholder="Full Name">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="reg-phone" placeholder="Phone Number">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="reg-business" placeholder="Business Name">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="reg-address" placeholder="Full Address">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="reg-pincode" placeholder="Pincode">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="reg-plan" placeholder="Plan (e.g. Pro)">
+                    </div>
+                    <button class="auth-btn success" onclick="finalizeSignup()">Complete Registration</button>
+                </div>
+
+                <p class="auth-footer">Existing Owner? <span onclick="showLogin()">Sign In</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="app-container hidden">
+        <!-- Navigation -->
+        <!-- Mobile Header -->
+        <header class="mobile-header hidden-desktop">
+            <button class="hamburger-btn" onclick="toggleMobileMenu()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 12h18M3 6h18M3 18h18" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </button>
+            <div class="mobile-brand">
+                <h1 style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <img id="mobile-brand-logo" class="hidden" style="height: 1.2em; width: auto; object-fit: contain;">
+                    <span id="mobile-brand-name">Na Dukan</span>
+                </h1>
+            </div>
+            <!-- Empty div for balance -->
+            <div style="width: 24px;"></div>
+            <span class="mobile-subtitle">by Na Dukan</span>
+        </header>
+
+        <!-- Section Indicator (Mobile) -->
+        <div class="section-indicator hidden-desktop">
+            <span id="current-section-name">Dashboard</span>
+        </div>
+
+        <!-- Mobile Navigation Drawer -->
+        <div id="mobile-drawer" class="mobile-drawer">
+            <div class="drawer-header">
+                <div class="drawer-brand">
+                    <h2 style="display: flex; align-items: center; gap: 8px;">
+                        <img id="drawer-brand-logo" class="hidden"
+                            style="height: 1.2em; width: auto; object-fit: contain;">
+                        <span id="drawer-brand-name">Na Dukan</span>
+                    </h2>
+                    <span>by Na Dukan</span>
+                </div>
+                <button class="close-drawer-btn" onclick="toggleMobileMenu()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </button>
+            </div>
+            <nav class="drawer-nav">
+                <button id="drawer-link-dashboard" class="drawer-link active"
+                    onclick="switchView('dashboard'); toggleMobileMenu()">Dashboard</button>
+                <button id="drawer-link-analysis" class="drawer-link"
+                    onclick="switchView('analysis'); toggleMobileMenu()">Data Analysis</button>
+                <button id="drawer-link-billing" class="drawer-link"
+                    onclick="switchView('billing'); toggleMobileMenu()">Billing</button>
+                <button id="drawer-link-sales" class="drawer-link"
+                    onclick="switchView('sales'); toggleMobileMenu()">Sales</button>
+                <button id="drawer-link-inventory" class="drawer-link"
+                    onclick="switchView('inventory'); toggleMobileMenu()">Inventory</button>
+                <button id="drawer-link-employees" class="drawer-link"
+                    onclick="switchView('employees'); toggleMobileMenu()">Employees</button>
+                <button id="drawer-link-predictions" class="drawer-link"
+                    onclick="switchView('predictions'); toggleMobileMenu()">Predictions</button>
+                <button id="drawer-link-settings" class="drawer-link"
+                    onclick="switchView('settings'); toggleMobileMenu()">Settings</button>
+            </nav>
+        </div>
+        <div id="drawer-overlay" class="drawer-overlay hidden" onclick="toggleMobileMenu()"></div>
+
+        <!-- Desktop Navigation -->
+        <nav class="navbar hidden-mobile">
+            <div class="logo" style="display:flex; flex-direction:column; line-height:1.2; justify-content:center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <img id="nav-brand-logo" class="hidden" style="height: 2rem; width: auto; object-fit: contain;">
+                    <span id="nav-brand-name" style="font-size:1.5rem; font-weight:800;">Na <span
+                            class="highlight">Dukan</span></span>
+                </div>
+                <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 500;">by Na Dukan</span>
+            </div>
+            <div class="nav-links">
+                <button class="nav-btn active" onclick="switchView('dashboard')">Dashboard</button>
+                <button class="nav-btn" onclick="switchView('analysis')">Data Analysis</button>
+                <button class="nav-btn" onclick="switchView('billing')">Billing</button>
+                <button class="nav-btn" onclick="switchView('sales')">Sales</button>
+                <button class="nav-btn" onclick="switchView('inventory')">Inventory</button>
+                <button class="nav-btn" onclick="switchView('employees')">Employees</button>
+                <button class="nav-btn" onclick="switchView('predictions')">Predictions</button>
+                <button class="nav-btn" onclick="switchView('settings')">Settings</button>
+            </div>
+        </nav>
+
+        <!-- Configuration Warning (If keys missing) -->
+        <div id="config-warning" class="banner hidden">
+            ⚠️ Please configure Supabase URL and Key in app.js
+        </div>
+
+        <!-- Dashboard View -->
+        <section id="dashboard" class="view active">
+            <header class="view-header">
+                <h1>Dashboard</h1>
+                <div class="filters hidden-mobile">
+                    <button class="filter-btn active" data-range="today">Today</button>
+                    <button class="filter-btn" data-range="week">This Week</button>
+                    <button class="filter-btn" data-range="month">This Month</button>
+                    <button class="filter-btn" data-range="year">This Year</button>
+                    <button class="filter-btn" id="custom-date-btn">Custom</button>
+                    <div id="custom-date-inputs" class="hidden">
+                        <input type="date" id="date-from">
+                        <input type="date" id="date-to">
+                        <button class="action-btn small" onclick="applyCustomDate()">Go</button>
+                    </div>
+                </div>
+
+                <!-- Mobile Filter Dropdown -->
+                <div class="mobile-dashboard-filter hidden-desktop">
+                    <label for="mobile-period-select" class="mobile-input-label">Select Period</label>
+                    <div class="mobile-select-wrapper">
+                        <select id="mobile-period-select" onchange="handleMobileFilterChange(this.value)">
+                            <option value="today" selected>Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <div class="select-arrow">▼</div>
+                    </div>
+
+                    <!-- Mobile Custom Date (Reused IDs will conflict if not careful, but desktop is hidden so safe to reuse logic if we target correctly, 
+                         BUT ids must be unique. I will use different IDs and update JS to handle both via class or separated logic.
+                         Actually, standard practice is unique IDs. Let's use new IDs for mobile custom inputs. -->
+                    <div id="mobile-custom-date-inputs" class="hidden"
+                        style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <input type="date" id="mobile-date-from" class="mobile-date-input">
+                        <input type="date" id="mobile-date-to" class="mobile-date-input">
+                        <button class="action-btn small" onclick="applyCustomDateMobile()">Go</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-scroll-container">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Sales</h3>
+                        <p class="stat-value" id="stat-total-sales">₹0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Cash Collected</h3>
+                        <p class="stat-value" id="stat-cash">₹0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>UPI Collected</h3>
+                        <p class="stat-value" id="stat-upi">₹0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Other</h3>
+                        <p class="stat-value" id="stat-other">₹0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Bills</h3>
+                        <p class="stat-value" id="stat-bill-count">0</p>
+                    </div>
+                </div>
+
+                <div class="dashboard-section" style="margin-top: 2rem;">
+                    <h2 style="font-size: 1.1rem; margin-bottom: 1rem;">Top Selling Products</h2>
+                    <div class="top-products-list" id="top-products-list">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Analysis View -->
+        <section id="analysis" class="view hidden">
+            <header class="view-header">
+                <h1>Data Analysis</h1>
+                <div class="filters hidden-mobile">
+                    <button class="filter-btn active" data-range="today">Today</button>
+                    <button class="filter-btn" data-range="week">This Week</button>
+                    <button class="filter-btn" data-range="month">This Month</button>
+                    <button class="filter-btn" data-range="year">This Year</button>
+                    <button class="filter-btn" id="analysis-custom-date-btn">Custom</button>
+                    <div id="analysis-custom-date-inputs" class="hidden">
+                        <input type="date" id="analysis-date-from">
+                        <input type="date" id="analysis-date-to">
+                        <button class="action-btn small" onclick="applyCustomDate('analysis')">Go</button>
+                    </div>
+                </div>
+
+                <!-- Mobile Analysis Filter Dropdown -->
+                <div class="mobile-dashboard-filter hidden-desktop">
+                    <label for="mobile-analysis-select" class="mobile-input-label">Select Period</label>
+                    <div class="mobile-select-wrapper">
+                        <select id="mobile-analysis-select" onchange="handleMobileAnalysisFilterChange(this.value)">
+                            <option value="today" selected>Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <div class="select-arrow">▼</div>
+                    </div>
+
+                    <div id="mobile-analysis-custom-inputs" class="hidden"
+                        style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <input type="date" id="mobile-analysis-date-from" class="mobile-date-input">
+                        <input type="date" id="mobile-analysis-date-to" class="mobile-date-input">
+                        <button class="action-btn small" onclick="applyCustomDateMobileAnalysis()">Go</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-scroll-container">
+                <div class="analysis-grid">
+                    <!-- Row 5: Product Sales Table (Moved to Top) -->
+                    <div class="chart-container full-width" style="height: auto;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h3>Detailed Sales Report</h3>
+                            <input type="text" id="sales-table-search" placeholder="Search..."
+                                onkeyup="filterSalesTable()"
+                                style="padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                        </div>
+                        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                            <table class="data-table" id="sales-report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product Name</th>
+                                        <th>Sales Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Row 1: Revenue Velocity & Trend -->
+                    <div class="chart-container">
+                        <h3>Revenue Velocity</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-velocity"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Revenue Trend</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-revenue"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Bill Velocity & Trend -->
+                    <div class="chart-container">
+                        <h3>Bill Velocity</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-bill-velocity"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Bills Trend</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-bills"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Product Sales Trend -->
+                    <div class="chart-container full-width" style="height: 400px;">
+                        <h3>Product Sales Trend</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-product"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Row 4: Payment Mode Distribution -->
+                    <div class="chart-container full-width">
+                        <h3>Payment Mode Distribution</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-payment"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Inventory View -->
+        <section id="inventory" class="view hidden">
+            <header class="view-header">
+                <h1>Inventory</h1>
+                <div class="header-actions">
+                    <input type="file" id="import-products-csv" accept=".csv" style="display:none;"
+                        onchange="importProductsCSV(event)">
+                    <button class="action-btn" onclick="document.getElementById('import-products-csv').click()">Import
+                        CSV</button>
+                    <button class="action-btn" onclick="exportProductsCSV()">Export CSV</button>
+                    <button class="action-btn" onclick="openAddTabModal()">+ New Tab</button>
+                    <button class="action-btn primary" onclick="openAddProductModal()">+ Add Product</button>
+                </div>
+            </header>
+
+            <!-- Inventory Search -->
+            <div style="margin-bottom: 1rem;">
+                <input type="text" id="inventory-search" placeholder="Search products..."
+                    oninput="renderInventoryList()"
+                    style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background: var(--bg-surface); color: var(--text-primary);">
+            </div>
+
+            <div class="tabs-container" id="inventory-tabs">
+                <!-- Product tabs injected here -->
+            </div>
+
+            <div class="inventory-list" id="inventory-list">
+                <!-- Products list injected here -->
+            </div>
+        </section>
+
+        <!-- Employees View -->
+        <section id="employees" class="view hidden">
+            <header class="view-header">
+                <h1>Employee Logs</h1>
+                <div class="sales-controls">
+                    <div class="control-group">
+                        <select id="employee-log-select" onchange="loadEmployeeLogs()">
+                            <option value="all">All Employees</option>
+                            <!-- Employees injected here -->
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <input type="date" id="employee-log-date" onchange="loadEmployeeLogs()">
+                    </div>
+                </div>
+            </header>
+
+            <div class="sales-table-container">
+                <table class="sales-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Employee Name</th>
+                            <th>Login Time</th>
+                            <th>Logout Time</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employee-logs-list">
+                        <!-- Logs injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Billing View -->
+        <section id="billing" class="view hidden">
+            <div class="billing-layout">
+                <div class="billing-products">
+                    <header class="billing-header">
+                        <div style="margin-bottom: 0.5rem;">
+                            <input type="text" id="billing-search" placeholder="Search products..."
+                                onkeyup="renderBilling()"
+                                style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.95rem;">
+                        </div>
+                        <div class="tabs-scroll" id="billing-tabs">
+                            <!-- Helper tabs injected here -->
+                            <button class="tab-pill active">All</button>
+                        </div>
+                    </header>
+                    <div class="product-grid" id="billing-grid">
+                        <!-- Product cards injected here -->
+                    </div>
+
+                    <!-- Mobile Go To Bill Button (Hidden on Desktop) -->
+                    <div class="mobile-bill-action-bar hidden-desktop">
+                        <button class="action-btn primary full-width" onclick="toggleBillingSidebar()">Go to Bill <span
+                                id="mobile-cart-count">(0)</span></button>
+                    </div>
+                </div>
+
+                <div id="billing-summary-panel" class="billing-sidebar mobile-slide-panel">
+                    <div class="mobile-panel-header hidden-desktop">
+                        <h2>Current Bill</h2>
+                        <button class="close-panel-btn" onclick="toggleBillingSidebar()">×</button>
+                    </div>
+                    <h2 class="hidden-mobile">Current Bill</h2>
+                    <div class="cart-items" id="cart-items">
+                        <!-- Cart items injected here -->
+                        <div class="empty-cart">Cart is empty</div>
+                    </div>
+
+                    <div class="billing-summary">
+                        <div class="summary-row">
+                            <span>Subtotal</span>
+                            <span id="bill-subtotal">₹0.00</span>
+                        </div>
+
+                        <div class="discount-section">
+                            <label>Discount</label>
+                            <select id="discount-type" onchange="calculateTotals()">
+                                <option value="none">None</option>
+                                <option value="flat">Flat (₹)</option>
+                                <option value="percentage">Percent (%)</option>
+                            </select>
+                            <input type="number" id="discount-value" class="hidden" placeholder="Value"
+                                oninput="calculateTotals()">
+                        </div>
+
+                        <div class="summary-row total">
+                            <span>Total</span>
+                            <span id="bill-total">₹0.00</span>
+                        </div>
+
+                        <div class="customer-info" style="margin-bottom: 1rem;">
+                            <label
+                                style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; display: block; color: var(--text-primary);">Customer
+                                Details</label>
+                            <input type="text" id="customer-name" placeholder="Customer Name"
+                                style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
+                            <input type="text" id="customer-phone" placeholder="Customer Phone"
+                                style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
+                        </div>
+
+                        <div class="payment-mode">
+                            <label>Payment Mode</label>
+                            <div class="mode-options">
+                                <label><input type="radio" name="paymode" value="CASH" checked> Cash</label>
+                                <label><input type="radio" name="paymode" value="UPI"> UPI</label>
+                                <label><input type="radio" name="paymode" value="OTHER"> Other</label>
+                            </div>
+                        </div>
+
+                        <button class="checkout-btn" onclick="generateBill()">Generate Bill</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sales View -->
+        <section id="sales" class="view hidden">
+            <header class="view-header">
+                <h1>Sales History</h1>
+                <div class="sales-controls">
+                    <div style="display: flex; gap: 0.5rem; margin-right: 1rem;">
+                        <input type="file" id="import-sales-csv" accept=".csv" style="display:none;"
+                            onchange="importSalesCSV(event)">
+                        <button class="action-btn small"
+                            onclick="document.getElementById('import-sales-csv').click()">Import CSV</button>
+                        <button class="action-btn small" onclick="exportSalesCSV()">Export CSV</button>
+                    </div>
+                    <!-- Filters -->
+                    <div class="control-group">
+                        <select id="sales-filter-payment" onchange="loadSales()">
+                            <option value="all">All Payment Modes</option>
+                            <option value="CASH">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="OTHER">Other</option>
+                        </select>
+                        <select id="sales-sort" onchange="loadSales()">
+                            <option value="date-desc">Date (Newest First)</option>
+                            <option value="date-asc">Date (Oldest First)</option>
+                            <option value="amount-desc">Amount (High to Low)</option>
+                            <option value="amount-asc">Amount (Low to High)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group expanded-filters">
+                        <!-- Desktop Filters -->
+                        <div class="filters hidden-mobile" style="margin-right: 1rem;">
+                            <button class="filter-btn active" data-range="today"
+                                onclick="setSalesFilter('today')">Today</button>
+                            <button class="filter-btn" data-range="week" onclick="setSalesFilter('week')">This
+                                Week</button>
+                            <button class="filter-btn" data-range="month" onclick="setSalesFilter('month')">This
+                                Month</button>
+                            <button class="filter-btn" data-range="year" onclick="setSalesFilter('year')">This
+                                Year</button>
+                            <button class="filter-btn" id="sales-custom-btn"
+                                onclick="toggleSalesCustomDate()">Custom</button>
+                        </div>
+
+                        <!-- Mobile Filters -->
+                        <div class="mobile-dashboard-filter hidden-desktop" style="width: 100%; margin-bottom: 0.5rem;">
+                            <label for="sales-mobile-select" class="mobile-input-label">Select Period</label>
+                            <div class="mobile-select-wrapper">
+                                <select id="sales-mobile-select" onchange="setSalesFilter(this.value)">
+                                    <option value="today" selected>Today</option>
+                                    <option value="week">This Week</option>
+                                    <option value="month">This Month</option>
+                                    <option value="year">This Year</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                                <div class="select-arrow">▼</div>
+                            </div>
+                        </div>
+
+                        <!-- Date Inputs (Shared) -->
+                        <div id="sales-custom-dates" class="hidden"
+                            style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <input type="date" id="sales-date-from" placeholder="From">
+                            <span class="separator hidden-mobile">to</span>
+                            <input type="date" id="sales-date-to" placeholder="To">
+                            <button class="action-btn small" onclick="loadSales()">Go</button>
+                        </div>
+
+                        <input type="number" id="sales-search-bill" placeholder="Bill #" oninput="loadSales()"
+                            style="margin-left: auto;">
+                    </div>
+                </div>
+            </header>
+
+            <div class="sales-table-container">
+                <table class="sales-table">
+                    <thead>
+                        <tr>
+                            <th>Bill #</th>
+                            <th>Date & Time</th>
+                            <th>Customer</th>
+                            <th>Payment Mode</th>
+                            <th>Items</th>
+                            <th>Discount</th>
+                            <th>Billed By</th>
+                            <th>Total Amount</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-list">
+                        <!-- Sales injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Predictions View -->
+        <section id="predictions" class="view hidden">
+            <header class="view-header">
+                <div>
+                    <h1>AI Sales Predictions</h1>
+                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.95rem;">Expected items sold
+                        based on historical data patterns.</p>
+                </div>
+                <div style="display:flex; align-items:center; gap: 0.75rem;">
+                    <span
+                        style="display:flex; align-items:center; gap:6px; font-size:0.85rem; color: var(--success-color); font-weight:600;">
+                        <span class="live-dot"></span> LIVE
+                    </span>
+                    <span id="pred-last-updated"
+                        style="font-size:0.78rem; color:var(--text-secondary);">Connecting...</span>
+                </div>
+            </header>
+
+            <div class="dashboard-scroll-container">
+                <div class="stats-grid" style="margin-bottom: 2rem;">
+                    <div class="stat-card" style="border-left: 4px solid #8b5cf6; position:relative; overflow:hidden;">
+                        <h3
+                            style="color: #8b5cf6; margin-bottom: 0.5rem; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.04em;">
+                            ⏱ Next 3 Hours</h3>
+                        <p class="stat-value" id="pred-3h-total" style="font-size: 1.5rem; color:#a78bfa;">...</p>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #3b82f6; position:relative; overflow:hidden;">
+                        <h3
+                            style="color: #3b82f6; margin-bottom: 0.5rem; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.04em;">
+                            📅 Tomorrow</h3>
+                        <p class="stat-value" id="pred-1d-total" style="font-size: 1.5rem; color:#60a5fa;">...</p>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #f59e0b; position:relative; overflow:hidden;">
+                        <h3
+                            style="color: #f59e0b; margin-bottom: 0.5rem; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.04em;">
+                            📆 Next 7 Days</h3>
+                        <p class="stat-value" id="pred-7d-total" style="font-size: 1.5rem; color:#fbbf24;">...</p>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #10b981; position:relative; overflow:hidden;">
+                        <h3
+                            style="color: #10b981; margin-bottom: 0.5rem; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.04em;">
+                            📊 Next 30 Days</h3>
+                        <p class="stat-value" id="pred-30d-total" style="font-size: 1.5rem; color:#4ade80;">...</p>
+                    </div>
+                </div>
+
+                <div class="chart-container full-width" style="height: auto; padding-top: 1rem;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="font-size: 1.05rem; font-weight:700; margin:0;">📋 Item-Level Predictions</h3>
+                        <span style="font-size:0.75rem; color:var(--text-secondary);">Sorted by volume</span>
+                    </div>
+                    <div class="table-container" style="max-height: 500px; overflow-y: auto;">
+                        <table class="data-table" id="predictions-table">
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Next 3 Hours</th>
+                                    <th>Tomorrow</th>
+                                    <th>Next 7 Days</th>
+                                    <th>Next 30 Days</th>
+                                </tr>
+                            </thead>
+                            <tbody id="predictions-list">
+                                <!-- Injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings View -->
+        <section id="settings" class="view hidden">
+            <header class="view-header">
+                <h1>Settings</h1>
+            </header>
+
+            <div class="dashboard-scroll-container">
+                <div class="settings-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+                    <!-- Profile Section -->
+                    <div class="settings-card"
+                        style="background: var(--bg-surface); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <div
+                                style="width: 50px; height: 50px; background: #EEF2FF; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--primary-color); font-size: 1.5rem;">
+                                👤</div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Profile</h3>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">Manage account
+                                    info
+                                </p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Owner Name</label>
+                            <input type="text" value="Loading..." id="settings-p-name" disabled
+                                style="background: #f9fafb;">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="text" value="Loading..." id="settings-p-email" disabled
+                                style="background: #f9fafb;">
+                        </div>
+                    </div>
+
+                    <!-- Shop Details Section -->
+                    <div class="settings-card"
+                        style="background: var(--bg-surface); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <div
+                                style="width: 50px; height: 50px; background: #FEF3C7; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #D97706; font-size: 1.5rem;">
+                                🏪</div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Shop Details</h3>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">Business
+                                    information
+                                </p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Business Name</label>
+                            <input type="text" value="Loading..." id="settings-s-name" disabled
+                                style="background: #f9fafb;">
+                        </div>
+                        <div class="form-group">
+                            <label>Address</label>
+                            <input type="text" value="Loading..." id="settings-s-addr" disabled
+                                style="background: #f9fafb;">
+                        </div>
+                    </div>
+
+                    <!-- Preferences Section (Owner Only) -->
+                    <div id="settings-preferences-card" class="settings-card hidden"
+                        style="background: var(--bg-surface); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <div
+                                style="width: 50px; height: 50px; background: #F3E8FF; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9333EA; font-size: 1.5rem;">
+                                ⚙️</div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Bill Preferences</h3>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">Customize your
+                                    bill details.</p>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label>Preferred Store Name <span class="hidden-desktop"
+                                    style="font-weight:400; font-size: 0.85em; color: #94A3B8;">- displayed at top of
+                                    screen and bill.</span></label>
+                            <input type="text" id="pref-store-name" placeholder="Na Dukan"
+                                style="width: 100%; margin-bottom: 0.5rem;">
+                        </div>
+
+                        <!-- Preferred Address -->
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label>Preferred Address</label>
+                            <input type="text" id="pref-store-address" placeholder="Store Address"
+                                style="width: 100%; margin-bottom: 0.5rem;">
+                        </div>
+
+                        <!-- Logo Upload -->
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label>Store Logo</label>
+                            <input type="file" id="pref-logo-input" accept="image/*"
+                                style="width: 100%; margin-bottom: 0.5rem;">
+                            <div id="pref-logo-preview-container" class="hidden"
+                                style="margin-top: 0.5rem; text-align: center;">
+                                <img id="pref-logo-preview"
+                                    style="max-height: 80px; border: 1px solid #ccc; padding: 2px;">
+                                <p id="pref-logo-size" style="font-size: 0.8rem; color: #666;"></p>
+                            </div>
+                        </div>
+
+                        <!-- Bill Note -->
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label>Bill Note</label>
+                            <textarea id="pref-bill-note" placeholder="e.g. Goods once sold will not be taken back."
+                                style="width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: inherit; font-size: 0.95rem; resize: vertical;"></textarea>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">This text will appear at the
+                                bottom of the bill.</span>
+                        </div>
+
+                        <!-- Bill Print Format -->
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label>Bill Print Format</label>
+                            <select id="pref-bill-format" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.95rem; font-family: inherit; margin-bottom: 0.5rem;">
+                                <option value="57mm">57mm (Receipt Paper)</option>
+                                <option value="A4">A4 (Standard Sheet)</option>
+                            </select>
+                        </div>
+
+                        <div style="text-align: right;">
+                            <button id="btn-save-pref-all" class="action-btn primary" style="width: auto;">Save Bill
+                                Preferences</button>
+                        </div>
+
+
+                    </div>
+
+                    <!-- Employee Section -->
+                    <div class="settings-card"
+                        style="background: var(--bg-surface); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <div
+                                style="width: 50px; height: 50px; background: #ECFDF5; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #D97706; font-size: 1.5rem;">
+                                👥</div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Employees</h3>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">Manage staff
+                                    access
+                                </p>
+                            </div>
+                        </div>
+                        <div id="employee-list-container" style="padding: 0.5rem 0;">
+                            <!-- List injected via JS -->
+                            <div style="text-align: center; color: var(--text-secondary); padding: 1rem;">Loading...
+                            </div>
+                        </div>
+                        <div style="text-align: center; margin-top: 1rem; margin-bottom: 1rem;">
+                            <button id="btn-add-employee" class="action-btn primary" onclick="openAddEmployeeModal()">+
+                                Add
+                                Employee</button>
+                        </div>
+
+                        <div
+                            style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                            <div>
+                                <label style="font-weight: 500; display: block; margin-bottom: 0.2rem;">Employee
+                                    Analysis</label>
+                                <span class="hidden-mobile"
+                                    style="font-size: 0.8rem; color: var(--text-secondary);">Allow staff to see Data
+                                    Analysis tab</span>
+                            </div>
+                            <div class="checkbox">
+                                <input type="checkbox" id="pref-employee-analysis"
+                                    style="width: 1.2rem; height: 1.2rem;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logout Section -->
+                    <div class="settings-card"
+                        style="background: var(--bg-surface); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                        <h3 style="margin-bottom: 1rem; color: var(--danger-color);">Session Management</h3>
+                        <p style="text-align: center; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                            Securely end your current session. You will be redirected to the login screen.
+                        </p>
+                        <button onclick="logout()"
+                            style="background: #FEF2F2; color: var(--danger-color); border: 1px solid #FECACA; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; width: 100%;">
+                            Log Out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <!-- Add Product Modal -->
+        <div id="modal-add-product" class="modal hidden">
+            <h2>Add New Product</h2>
+            <form id="add-product-form">
+                <div class="form-group">
+                    <label>Product Name</label>
+                    <input type="text" id="p-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Price (₹)</label>
+                    <input type="number" id="p-price" required min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Stock</label>
+                    <input type="number" id="p-stock" required min="0">
+                </div>
+                <div class="form-group">
+                    <label>Category (Tab)</label>
+                    <select id="p-tab"></select>
+                </div>
+                <!-- Image Upload -->
+                <div class="form-group">
+                    <label>Product Image</label>
+                    <input type="file" id="p-image-input" accept="image/*">
+                    <div id="p-cropper-container" class="hidden" style="margin-top: 1rem; max-height: 300px;">
+                        <img id="p-image-preview" style="max-width: 100%;">
+                    </div>
+                </div>
+                <div class="form-group checkbox">
+                    <label><input type="checkbox" id="p-house"> In-house made?</label>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn">Save Product</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Receipt Preview Modal -->
+        <div id="modal-bill-preview" class="modal hidden" style="width: auto; max-width: 400px; padding: 1rem;">
+            <div id="receipt-preview-content" class="receipt-content">
+                <!-- Receipt Content Injected Here -->
+            </div>
+            <div class="modal-actions" style="flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+                <button class="action-btn primary full-width" onclick="printBill()">Print</button>
+                <button class="action-btn full-width" onclick="closeBillPreview()">Print Not Needed</button>
+            </div>
+        </div>
+
+        <!-- Edit Product Modal -->
+        <div id="modal-edit-product" class="modal hidden">
+            <h2>Edit Product</h2>
+            <form id="edit-product-form">
+                <input type="hidden" id="edit-p-id">
+                <div class="form-group">
+                    <label>Product Name</label>
+                    <input type="text" id="edit-p-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Price (₹)</label>
+                    <input type="number" id="edit-p-price" required min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Stock</label>
+                    <input type="number" id="edit-p-stock" required min="0">
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="edit-p-tab"></select>
+                </div>
+                <!-- Image Upload -->
+                <div class="form-group">
+                    <label>Product Image</label>
+                    <input type="file" id="edit-p-image-input" accept="image/*">
+                    <div id="edit-p-cropper-container" class="hidden" style="margin-top: 1rem; max-height: 300px;">
+                        <img id="edit-p-image-preview" style="max-width: 100%;">
+                    </div>
+                </div>
+                <div class="form-group checkbox">
+                    <label><input type="checkbox" id="edit-p-house"> In-house made?</label>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn">Update Product</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Add Tab Modal -->
+        <div id="modal-add-tab" class="modal hidden">
+            <h2>New Category Tab</h2>
+            <form id="add-tab-form">
+                <div class="form-group">
+                    <label>Tab Name</label>
+                    <input type="text" id="t-name" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn">Add Tab</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Add Employee Modal -->
+        <div id="modal-add-employee" class="modal hidden">
+            <h2>Add Employee</h2>
+            <p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:1rem;">Create login for your staff.
+                Linked to your shop.</p>
+            <form id="add-employee-form">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="emp-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Email ID</label>
+                    <input type="email" id="emp-email" required placeholder="staff@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Create Password</label>
+                    <input type="password" id="emp-pass" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="emp-confirm" required minlength="6">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn">Add Employee</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Import Preview Modal -->
+        <div id="modal-import-preview" class="modal hidden">
+            <h2>Preview Import</h2>
+            <p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:1rem;">Preview of the first item to
+                be imported:</p>
+            <div id="import-preview-content"
+                style="background: var(--bg-surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 1rem; max-height: 400px; overflow-y: auto;">
+                <!-- Dynamically injected preview -->
+            </div>
+            <p id="import-total-count"
+                style="font-size: 0.95rem; margin-bottom: 1rem; font-weight: 600; color:var(--primary-color);"></p>
+            <div class="modal-actions">
+                <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                <button type="button" id="btn-confirm-import" class="save-btn success">Confirm & Import All</button>
+            </div>
+        </div>
+        <!-- Undo Bill Modal -->
+        <div id="modal-undo-bill" class="modal hidden">
+            <h2>Undo Bill <span id="undo-bill-number" style="color:var(--primary-color);"></span></h2>
+            <p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:1rem;">Are you sure you want to undo this bill? This will revert the stock and exclude the bill from your revenue totals.</p>
+            <form id="undo-bill-form">
+                <input type="hidden" id="undo-bill-id">
+                <div class="form-group">
+                    <label>Reason / Notes (Required)</label>
+                    <textarea id="undo-bill-notes" rows="3" required placeholder="e.g. Customer returned items, mistake in billing"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn danger">Confirm Undo</button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+
+    <!-- Toast Notification (Global) -->
+    <div id="toast-notification" class="hidden">Product Added!</div>
+
+
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

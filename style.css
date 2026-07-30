@@ -1,0 +1,2760 @@
+:root {
+    --bg-app: #f4f7fe;
+    --bg-surface: #FFFFFF;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --primary-color: #3b82f6;
+    --primary-hover: #2563eb;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --border-color: #e2e8f0;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.03);
+    --shadow-md: 0 8px 16px -4px rgba(0, 0, 0, 0.05), 0 4px 8px -4px rgba(0, 0, 0, 0.03);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Outfit', 'Inter', sans-serif;
+}
+
+body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    /* App-like feel */
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Navbar */
+.navbar {
+    background-color: rgba(255, 255, 255, 0.85);
+    /* Glassmorphism */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 1.5rem;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.logo {
+    font-weight: 700;
+    font-size: 1.25rem;
+}
+
+.highlight {
+    color: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.nav-links {
+    display: flex;
+    gap: 1rem;
+}
+
+.nav-btn {
+    background: none;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.95rem;
+}
+
+.nav-btn.active,
+.nav-btn:hover {
+    background-color: #eff6ff;
+    color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+/* Views */
+.view {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.view.hidden {
+    display: none;
+}
+
+.view-header {
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.view-header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+/* Banner */
+.banner {
+    background: #FEF3C7;
+    color: #92400E;
+    text-align: center;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Dashboard */
+.dashboard-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 2rem;
+}
+
+.filters {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.filter-btn {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.filter-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.stat-card {
+    background: var(--bg-surface);
+    padding: 1.5rem;
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card h3 {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.chart-container {
+    background: var(--bg-surface);
+    padding: 1.5rem;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chart-container:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.chart-wrapper {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    /* Crucial for flex child resizing */
+    width: 100%;
+}
+
+.chart-container h3 {
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+/* Multi Select Dropdown */
+.multi-select-container {
+    position: relative;
+}
+
+.multi-select-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    width: 250px;
+    z-index: 100;
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.multi-select-dropdown.hidden {
+    display: none;
+}
+
+.multi-select-dropdown .search-input {
+    margin: 0.5rem;
+    width: calc(100% - 1rem);
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.checkbox-list {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 0 0.5rem;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.checkbox-item:hover {
+    background: var(--bg-background);
+}
+
+
+
+.top-products-list {
+    background: var(--bg-surface);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.top-product-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.top-product-item:last-child {
+    border-bottom: none;
+}
+
+.top-product-item .rank {
+    font-weight: 700;
+    color: var(--text-secondary);
+    width: 30px;
+}
+
+.top-product-item .name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.top-product-item .qty {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+/* Inventory */
+.tabs-container {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+
+.tab-pill {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    padding: 0.6rem 1.4rem;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-weight: 500;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.95rem;
+}
+
+.tab-pill:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.tab-pill.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+.inventory-list {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-surface);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.inventory-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.inventory-item:last-child {
+    border-bottom: none;
+}
+
+.item-info h4 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.item-meta {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.item-actions button {
+    padding: 0.25rem 0.75rem;
+    margin-left: 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.cart-items {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #F9FAFB;
+    padding: 0.75rem;
+    border-radius: 8px;
+}
+
+.cart-item-name {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.qty-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 1rem;
+}
+
+.qty-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-btn {
+    color: var(--danger-color);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.billing-summary {
+    border-top: 1px solid var(--border-color);
+    padding-top: 1rem;
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+}
+
+.summary-row.total {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.discount-section {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.discount-section select,
+.discount-section input {
+    padding: 0.3rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.payment-mode {
+    margin: 0.5rem 0;
+}
+
+.mode-options {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.25rem;
+}
+
+.checkout-btn {
+    background: var(--success-color);
+    color: white;
+    border: none;
+    padding: 1rem;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 0.5rem;
+    font-size: 1.05rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+}
+
+.checkout-btn:hover {
+    background: #059669;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px -1px rgba(16, 185, 129, 0.4);
+}
+
+/* Modals */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.modal {
+    background: var(--bg-surface);
+    padding: 2.5rem;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: var(--shadow-lg);
+    animation: modalPopIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalPopIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.modal h2 {
+    margin-bottom: 1.5rem;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group.checkbox {
+    flex-direction: row;
+    align-items: center;
+}
+
+.form-group input,
+.form-group select {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: var(--bg-surface);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* Sales View */
+.sales-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.control-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.control-group select,
+.control-group input {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.separator {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.sales-table-container {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg-surface);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.sales-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+    /* Ensure table doesn't get squashed */
+}
+
+.sales-table th,
+.sales-table td {
+    text-align: left;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sales-table th {
+    background: #F9FAFB;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    position: sticky;
+    top: 0;
+}
+
+.sales-table td {
+    font-size: 0.95rem;
+}
+
+.sales-table tr:hover {
+    background: #F9FAFB;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.save-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+}
+
+.cancel-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+    background: #f8fafc;
+}
+
+.action-btn {
+    background: white;
+    border: 1px solid var(--border-color);
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.action-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.action-btn.primary {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+}
+
+.action-btn.primary:hover {
+    background: var(--primary-hover);
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Data Analysis Grid */
+.analysis-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.analysis-grid .chart-container.full-width {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 768px) {
+    .analysis-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Live Dot Pulse Animation */
+.live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success-color);
+    animation: livePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.4;
+        transform: scale(0.75);
+    }
+}
+
+/* Confidence Badges */
+.conf-badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.conf-high {
+    background: rgba(16, 185, 129, 0.12);
+    color: #047857;
+}
+
+.conf-med {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+}
+
+.conf-low {
+    background: rgba(239, 68, 68, 0.12);
+    color: #b91c1c;
+}
+
+/* Prediction Badges */
+.pred-badge {
+    display: inline-block;
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.pred-purple {
+    background: rgba(139, 92, 246, 0.12);
+    color: #7c3aed;
+}
+
+.pred-blue {
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
+}
+
+.pred-amber {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+}
+
+.pred-green {
+    background: rgba(16, 185, 129, 0.12);
+    color: #047857;
+}
+
+/* Collapsible Section */
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    background: var(--bg-surface);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+    margin-top: 2rem;
+}
+
+.collapsible-header:hover {
+    background: var(--bg-background);
+}
+
+.collapsible-content {
+    transition: all 0.3s ease-in-out;
+}
+
+.collapsible-content.hidden {
+    display: none !important;
+}
+
+/* Data Table Styles */
+.data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 1rem;
+    font-size: 0.95rem;
+}
+
+.data-table th,
+.data-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.data-table th {
+    background-color: #f8fafc;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    color: var(--text-secondary);
+}
+
+.data-table tr:hover td {
+    background-color: #f8fafc;
+}
+
+/* Authentication */
+.auth-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-app);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.auth-wrapper.hidden {
+    display: none;
+}
+
+.auth-card {
+    background: var(--bg-surface);
+    padding: 2.5rem;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color);
+    width: 100%;
+    max-width: 420px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.auth-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.auth-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.875rem;
+    border-radius: 10px;
+    font-weight: 600;
+    width: 100%;
+    cursor: pointer;
+    margin-top: 1rem;
+    font-size: 1.05rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+.auth-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px -1px rgba(59, 130, 246, 0.4);
+}
+
+.auth-btn.success {
+    background: var(--success-color);
+}
+
+.auth-footer {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.auth-footer span {
+    color: var(--primary-color);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.auth-error {
+    color: var(--danger-color);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+/* Fixed Inventory Buttons */
+.item-actions button {
+    padding: 0.4rem 0.8rem !important;
+    margin-left: 0.5rem;
+    border-radius: 6px !important;
+    border: 1px solid var(--border-color) !important;
+    background: white;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+    margin-bottom: 0 !important;
+    padding-bottom: 0.4rem !important;
+}
+
+.item-actions .btn-edit:hover {
+    background: var(--bg-app);
+    border-color: var(--text-secondary) !important;
+}
+
+.item-actions .btn-delete {
+    color: var(--danger-color) !important;
+    border-color: #FECACA !important;
+    background: #FEF2F2 !important;
+}
+
+.item-actions .btn-delete:hover {
+    background: #FEE2E2 !important;
+    border-color: var(--danger-color) !important;
+}
+
+/* Billing */
+.billing-layout {
+    display: flex;
+    gap: 1.5rem;
+    height: 100%;
+}
+
+.billing-products {
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.billing-header {
+    margin-bottom: 1rem;
+}
+
+.tabs-scroll {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    overflow-y: auto;
+    padding-bottom: 1rem;
+}
+
+.product-card {
+    background: var(--bg-surface);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    height: 100px;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.product-card:active {
+    transform: scale(0.98);
+}
+
+.card-image {
+    width: 40%;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.card-details {
+    width: 60%;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.product-card h4 {
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+}
+
+.price {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.add-btn {
+    background: var(--primary-color);
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.add-btn:hover {
+    background: var(--primary-hover);
+    transform: scale(1.05);
+}
+
+.billing-sidebar {
+    flex: 1;
+    background: var(--bg-surface);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+    min-width: 300px;
+    max-width: 400px;
+}
+
+@media (max-width: 768px) {
+    .billing-layout {
+        flex-direction: column-reverse;
+    }
+
+    .billing-sidebar {
+        max-width: 100%;
+        min-width: 100%;
+        margin-top: 1rem;
+    }
+
+    .tabs-scroll {
+        padding-bottom: 1rem;
+    }
+}
+
+/* Mobile Optimizations */
+@media (max-width: 640px) {
+
+    /* Tighten Layout */
+    .navbar {
+        padding: 0 1rem;
+        height: auto;
+        min-height: 60px;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .logo {
+        padding: 0.5rem 0;
+    }
+
+    .nav-links {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 0.25rem;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .view {
+        padding: 1rem;
+        padding-bottom: 80px;
+        /* Ensure bottom content is accessible */
+    }
+
+    /* Dashboard Header */
+    .view-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .filters {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+
+    .stat-card {
+        padding: 1rem;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+    }
+
+    /* Charts */
+    .chart-container {
+        padding: 1rem;
+        min-height: 250px;
+    }
+
+    .analysis-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Billing */
+    .billing-layout {
+        flex-direction: column-reverse;
+        /* Cart at top visually via order or bottom? */
+    }
+
+    .billing-sidebar {
+        /* Make sidebar fixed bottom or just scrollable top? Let's just keep it stacked for simplicity but limit height */
+        max-height: 40vh;
+        overflow-y: auto;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .billing-products {
+        height: 50vh;
+        /* Split screen height */
+    }
+
+    .product-grid {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 0.5rem;
+    }
+
+    .product-card {
+        padding: 0.75rem;
+    }
+}
+
+/* --- Mobile/Tablet Header & Drawer Redesign --- */
+
+/* Utility Visibility */
+.hidden-desktop {
+    display: none !important;
+}
+
+.hidden-mobile {
+    display: flex !important;
+    /* Navbar is flex */
+}
+
+/* Breakpoint for Mobile/Tablet (Tablet ends around 1024px usually) */
+/* User requested changes for "Mobile & Tablet". Desktop unchanged. */
+@media (max-width: 1024px) {
+    .hidden-desktop {
+        display: flex !important;
+    }
+
+    .hidden-mobile {
+        display: none !important;
+    }
+
+    /* Mobile Header */
+    /* Mobile Header */
+    .mobile-header {
+        background-color: var(--bg-surface);
+        border-bottom: 1px solid var(--border-color);
+        height: 60px;
+        /* Grid for centering */
+        display: grid;
+        grid-template-columns: 48px 1fr 48px;
+        align-items: center;
+        padding: 0 0.5rem;
+        flex-shrink: 0;
+        box-shadow: var(--shadow-sm);
+        position: relative;
+        /* For subtitle positioning */
+    }
+
+    .mobile-header>.hamburger-btn {
+        grid-column: 1;
+        justify-self: start;
+    }
+
+    .mobile-header>div:last-of-type {
+        grid-column: 3;
+        justify-self: end;
+    }
+
+    .mobile-brand {
+        grid-column: 2;
+        justify-self: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
+    .mobile-brand h1 {
+        font-size: 1.25rem;
+        font-weight: 800;
+        margin: 0;
+    }
+
+    .mobile-subtitle {
+        position: absolute;
+        bottom: 4px;
+        right: 12px;
+        font-size: 0.6rem;
+        color: var(--text-secondary);
+        font-weight: 400;
+        opacity: 0.7;
+        pointer-events: none;
+    }
+
+
+
+    .mobile-brand span {
+        font-size: inherit;
+        color: inherit;
+        font-weight: inherit;
+    }
+
+    .hamburger-btn {
+        background: none;
+        border: none;
+        padding: 0.5rem;
+        cursor: pointer;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Section Indicator */
+    .section-indicator {
+        background: var(--bg-app);
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        font-weight: 700;
+        font-size: 1.25rem;
+        color: var(--text-primary);
+        display: block !important;
+        /* Override hidden-desktop display:flex if not careful */
+    }
+
+    /* Drawer */
+    .mobile-drawer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        height: 100vh;
+        background: var(--bg-surface);
+        z-index: 2000;
+        box-shadow: var(--shadow-md);
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .mobile-drawer.open {
+        transform: translateX(0);
+    }
+
+    .drawer-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1500;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s;
+    }
+
+    .drawer-overlay.visible {
+        opacity: 1;
+        visibility: visible;
+        display: block !important;
+    }
+
+    .drawer-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .drawer-brand h2 {
+        font-size: 1.25rem;
+        font-weight: 800;
+        margin: 0;
+        color: #F8FAFC;
+    }
+
+    .drawer-brand>span {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+
+    .close-drawer-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0.5rem;
+    }
+
+    .drawer-nav {
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        overflow-y: auto;
+    }
+
+    .drawer-link {
+        background: none;
+        border: none;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .drawer-link.active,
+    .drawer-link:hover {
+        background-color: #EFF6FF;
+        color: var(--primary-color);
+        font-weight: 600;
+    }
+
+    /* Dashboard Specific Mobile Tweaks */
+
+    /* Filters - Horizontal Scroll & Thumb Friendly */
+    .filters {
+        display: flex;
+        overflow-x: auto;
+        white-space: nowrap;
+        gap: 0.75rem;
+        padding: 0.25rem 0.25rem 1rem 0.25rem;
+        /* Space for shadow/focus */
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+    }
+
+    .filters::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .filters::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 4px;
+    }
+
+    .filter-btn {
+        flex: 0 0 auto;
+        padding: 0.6rem 1.25rem;
+        font-size: 0.95rem;
+        border-radius: 999px;
+        /* Rounded pill style usually better for mobile tabs */
+    }
+
+    .filter-btn.active {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+    }
+
+    /* Metrics Cards - 1 column on mobile, 2 on tablet */
+    .stats-grid {
+        grid-template-columns: 1fr;
+        /* Default Mobile */
+        gap: 1rem;
+    }
+
+    .stat-card {
+        padding: 1.25rem;
+        /* Full width is handled by grid 1fr */
+    }
+
+    /* Hide view header H1 as we have Section Indicator */
+    .view-header h1 {
+        display: none;
+    }
+
+    /* Fix header layout */
+    .view-header {
+        flex-direction: column;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+
+    /* ── Predictions Mobile ── */
+
+    /* Stack header live indicator below subtitle */
+    #predictions .view-header {
+        gap: 0.5rem;
+    }
+
+    #predictions .view-header>div:last-child {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    /* Summary cards: 2x2 grid on mobile */
+    #predictions .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+
+    /* Show predictions subtitle on mobile (h1 is hidden by section-indicator) */
+    #predictions .view-header p {
+        display: block !important;
+        font-size: 0.82rem;
+        color: #94A3B8;
+        margin-top: 0.25rem;
+        margin-bottom: 0;
+    }
+
+    /* Collapse view-header top margin */
+    #predictions .view-header {
+        margin-bottom: 1rem;
+        padding-top: 0.25rem;
+    }
+
+    #predictions .stat-card {
+        padding: 0.9rem 1rem;
+        border-radius: 12px;
+    }
+
+    #predictions .stat-card h3 {
+        font-size: 0.78rem;
+    }
+
+    #predictions .stat-card .stat-value {
+        font-size: 1rem !important;
+    }
+
+    /* Predictions table: make it horizontally scrollable */
+    #predictions .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 12px;
+        max-height: none;
+    }
+
+    #predictions .data-table {
+        min-width: 500px;
+        font-size: 0.85rem;
+    }
+
+    #predictions .data-table th,
+    #predictions .data-table td {
+        padding: 0.6rem 0.75rem;
+        white-space: nowrap;
+    }
+
+    /* Make product name column wrap */
+    #predictions .data-table td:first-child {
+        white-space: normal;
+        min-width: 120px;
+        max-width: 160px;
+    }
+
+    /* Smaller badges on mobile */
+    .pred-badge {
+        padding: 0.2rem 0.45rem;
+        font-size: 0.78rem;
+    }
+
+    .conf-badge {
+        font-size: 0.65rem;
+        padding: 0.08rem 0.35rem;
+    }
+
+    /* Live dot header row */
+    #pred-last-updated {
+        font-size: 0.72rem;
+    }
+}
+
+/* Tablet Only (approx 600px to 1024px) */
+@media (min-width: 600px) and (max-width: 1024px) {
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        /* 2 columns for tablet */
+    }
+}
+
+/* Ensure desktop navbar visibility reset */
+@media (min-width: 1025px) {
+    .hidden-desktop {
+        display: none !important;
+    }
+
+    .hidden-mobile {
+        display: flex !important;
+    }
+
+    .mobile-drawer {
+        display: none;
+    }
+
+    .section-indicator {
+        display: none !important;
+    }
+}
+
+/* Mobile Dashboard Filter Styles */
+.mobile-dashboard-filter {
+    width: 100%;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.mobile-input-label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.mobile-select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.mobile-select-wrapper select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    appearance: none;
+    /* Remove default arrow */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.mobile-select-wrapper select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.select-arrow {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.mobile-date-input {
+    flex: 1;
+    padding: 0.6rem;
+    font-size: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-surface);
+}
+
+/* Ensure filter hidden on mobile */
+@media (max-width: 1024px) {
+    .hidden-mobile {
+        display: none !important;
+    }
+}
+
+/* Expanded Filters for Sales */
+.expanded-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.expanded-filters .filters {
+    margin-bottom: 0px;
+    /* Reset */
+    flex-wrap: wrap;
+}
+
+/* Mobile/Tablet Blue/Black Theme */
+@media (max-width: 1024px) {
+    .expanded-filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .expanded-filters input[type="number"] {
+        width: 100%;
+        margin-left: 0 !important;
+        margin-top: 0.5rem;
+    }
+
+    #sales-custom-dates {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    #sales-custom-dates input {
+        flex: 1;
+    }
+
+    /* Backgrounds */
+    body {
+        background-color: #0F172A;
+        /* Slate 900 */
+        color: #F1F5F9;
+        /* Slate 100 */
+    }
+
+    .mobile-header {
+        background-color: #1E293B;
+        /* Slate 800 */
+        border-bottom-color: #334155;
+    }
+
+    .mobile-header .hamburger-btn {
+        color: #F1F5F9;
+    }
+
+    .mobile-drawer {
+        background-color: #1E293B;
+        color: #F1F5F9;
+    }
+
+    .drawer-header {
+        border-bottom-color: #334155;
+    }
+
+    .drawer-brand span {
+        color: #94A3B8;
+        /* Slate 400 */
+    }
+
+    .close-drawer-btn {
+        color: #F1F5F9;
+    }
+
+    .drawer-link {
+        color: #CBD5E1;
+        /* Slate 300 */
+    }
+
+    .drawer-link:hover,
+    .drawer-link.active {
+        background-color: #334155;
+        color: #60A5FA;
+        /* Blue 400 */
+    }
+
+    /* Dashboard View on Mobile */
+    #dashboard.view {
+        background-color: #0F172A;
+    }
+
+    .section-indicator {
+        background-color: #0F172A;
+        border-bottom-color: #334155;
+        color: #F1F5F9;
+    }
+
+    /* Cards */
+    .stat-card {
+        background-color: #1E293B;
+        border-color: #334155;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    }
+
+    .stat-card h3 {
+        color: #94A3B8;
+        /* Slate 400 */
+    }
+
+    /* Money Green — only for non-predictions stat cards */
+    .stat-value {
+        color: #4ADE80 !important;
+        /* Green 400 */
+    }
+
+    /* Predictions stat cards keep their own accent colors */
+    #predictions .stat-value {
+        color: inherit !important;
+    }
+
+    /* Top Products */
+    .dashboard-section h2 {
+        color: #F1F5F9;
+    }
+
+    .top-products-list {
+        background-color: #1E293B;
+        border-color: #334155;
+    }
+
+    .top-product-item {
+        border-bottom-color: #334155;
+        color: #F1F5F9;
+    }
+
+    .top-product-item .rank {
+        color: #94A3B8;
+    }
+
+    .top-product-item .qty {
+        color: #4ADE80;
+        /* Green */
+    }
+
+    /* Inputs/Drops */
+    .mobile-select-wrapper select {
+        background-color: #1E293B;
+        border-color: #334155;
+        color: #F1F5F9;
+    }
+
+    .mobile-input-label {
+        color: #94A3B8;
+    }
+
+    .select-arrow {
+        color: #94A3B8;
+    }
+
+    .mobile-date-input {
+        background-color: #1E293B;
+        border-color: #334155;
+        color: #F1F5F9;
+        color-scheme: dark;
+        /* Ensures date picker popup is dark */
+    }
+
+    /* Subtitle in Header */
+    .mobile-subtitle {
+        color: #94A3B8;
+        opacity: 0.6;
+    }
+
+    /* Hide Scrollbar for Dashboard */
+    .dashboard-scroll-container::-webkit-scrollbar,
+    .view::-webkit-scrollbar,
+    body::-webkit-scrollbar {
+        display: none;
+    }
+
+    .dashboard-scroll-container,
+    .view,
+    body {
+        -ms-overflow-style: none;
+        /* IE and Edge */
+        scrollbar-width: none;
+        /* Firefox */
+    }
+
+    /* Mobile Analysis / Charts Layout */
+    .analysis-grid {
+        display: flex;
+        /* Stack vertically */
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-top: 0.5rem;
+    }
+
+    /* Common Chart Container Styles for Mobile */
+    .chart-container,
+    .chart-container.full-width {
+        width: 100%;
+        /* Fit viewport width */
+        min-height: 250px;
+        /* Readable height */
+        max-height: 40vh;
+        /* Don't exceed ~40% of screen height to ensure part of next graph is hinted or just fits well */
+        margin-bottom: 0;
+        padding: 1rem;
+        box-sizing: border-box;
+        overflow: hidden;
+        /* Prevent horizontal scroll */
+
+        /* Dark Theme Inherit */
+        background-color: #1E293B;
+        border-color: #334155;
+    }
+
+    .chart-container h3 {
+        color: #94A3B8;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .chart-wrapper {
+        position: relative;
+        height: 100%;
+        width: 100%;
+    }
+
+    /* Billing Section Mobile */
+    .product-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.5rem;
+    }
+
+    .product-card {
+        padding: 0.5rem;
+    }
+
+    .product-card h3 {
+        font-size: 0.9rem;
+    }
+
+    .product-card .price {
+        font-size: 0.9rem;
+    }
+
+    /* Mobile Bill Action Bar */
+    .mobile-bill-action-bar {
+        position: fixed;
+        bottom: 0px;
+        left: 0;
+        right: 0;
+        padding: 1rem;
+        background: var(--bg-surface);
+        background: #1E293B;
+        /* Match dark theme */
+        border-top: 1px solid #334155;
+        z-index: 50;
+    }
+
+    /* Modify sidebar for Slide-in */
+    .billing-sidebar.mobile-slide-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        /* Mobile full width */
+        max-width: 100%;
+        height: 100% !important;
+        max-height: none !important;
+        /* Override restricted height */
+        background: #0F172A;
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-in-out;
+        padding: 0.75rem;
+        /* Reduced padding */
+        display: flex !important;
+        /* Force flex since hidden-desktop might conflict if not careful, but sidebar is shown. */
+        flex-direction: column;
+        border-left: none;
+        overflow-y: auto !important;
+        /* Allow main container to scroll */
+    }
+
+    /* Sticky Header in Mobile Sidebar */
+    .billing-sidebar.mobile-slide-panel .mobile-panel-header {
+        position: sticky;
+        top: -0.75rem;
+        /* Negative top to account for padding if needed, or 0. Actually padding is on container. */
+        /* If padding is on container, sticky is relative to content box. Top: 0 is fine. */
+        /* BUT padding 0.75rem on container acts as gap. Sticky element sits inside padding? No. */
+        /* Sticky element is child. Padding is on sidebar. */
+        /* So top: 0 means 0px from padding edge. Correct. */
+        /* However, to make it look flush, we might want to move padding to children or negative margin. */
+        /* Let's use negative margin to counteract container padding for header full width look if desired, */
+        /* but simpler is just top: -0.75rem to stick to very top. */
+        top: -0.75rem;
+        z-index: 50;
+        background: #0F172A;
+        /* Match bg */
+        margin: -0.75rem -0.75rem 0.5rem -0.75rem;
+        padding: 0.75rem;
+    }
+
+    /* Allow items list to be natural height */
+    .billing-sidebar.mobile-slide-panel .cart-items {
+        flex: none !important;
+        overflow: visible !important;
+    }
+
+    /* Compact Mobile Cart Items */
+    .billing-sidebar.mobile-slide-panel .cart-item {
+        padding: 0.5rem;
+        min-height: auto;
+    }
+
+    .billing-sidebar.mobile-slide-panel .cart-item-name {
+        font-size: 0.85rem;
+    }
+
+    .billing-sidebar.mobile-slide-panel .qty-btn {
+        width: 22px;
+        height: 22px;
+    }
+
+    /* Compact Summary */
+    .billing-sidebar.mobile-slide-panel .billing-summary {
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .billing-sidebar.mobile-slide-panel .payment-mode {
+        margin: 0.25rem 0;
+    }
+
+    .billing-sidebar.mobile-slide-panel .checkout-btn {
+        padding: 0.75rem;
+        margin-top: 0.25rem;
+    }
+
+    .billing-sidebar.mobile-slide-panel.open {
+        transform: translateX(0);
+    }
+
+    .mobile-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 0.5rem;
+    }
+
+    .close-panel-btn {
+        background: none;
+        border: none;
+        color: #F1F5F9;
+        font-size: 2rem;
+        line-height: 1;
+    }
+
+    /* Hide standard sidebar header on mobile if redundant layout */
+    .billing-sidebar>h2.hidden-mobile {
+        display: none;
+    }
+
+    /* Billing Products Container adjustments */
+    .billing-products {
+        padding-bottom: 80px;
+        /* Space for fixed button */
+    }
+
+    /* Sales Table Mobile Optimizations */
+    .sales-table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -0.5rem;
+        /* Negative margin to span full width if padded */
+        padding: 0 0.5rem;
+        /* Compensation */
+        box-shadow: inset -10px 0 10px -10px rgba(0, 0, 0, 0.5);
+        /* Right shadow hint */
+    }
+
+    .sales-table {
+        min-width: 600px;
+        /* Ensure it triggers scroll */
+        font-size: 0.9rem;
+    }
+
+    .sales-table th,
+    .sales-table td {
+        padding: 1rem 0.75rem;
+        /* Larger touch targets */
+        white-space: nowrap;
+    }
+
+    .sales-table th {
+        background-color: #1E293B;
+        /* Match dark theme header */
+        color: #94A3B8;
+        position: sticky;
+        left: 0;
+        top: 0;
+        z-index: 20;
+    }
+
+    /* Column Priorities */
+    /* Bill # (1st col usually) */
+    .sales-table td:nth-child(1) {
+        font-weight: 600;
+        color: #F1F5F9;
+    }
+
+    /* Total Amount (Last col?) */
+    .sales-table td:last-child {
+        font-weight: 800;
+        color: #4ADE80;
+        /* Green money */
+        font-size: 1rem;
+    }
+
+    /* View Items button */
+    .sales-table .action-btn.small {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.85rem;
+    }
+
+    /* ── Predictions Dark Theme ── */
+    #predictions.view {
+        background-color: #0F172A;
+    }
+
+    #predictions .chart-container {
+        background-color: #1E293B;
+        border-color: #334155;
+        max-height: none;
+        overflow: visible;
+    }
+
+    #predictions .chart-container h3 {
+        color: #CBD5E1;
+    }
+
+    /* Dark predictions table */
+    #predictions .data-table thead tr {
+        background-color: #1E293B;
+    }
+
+    #predictions .data-table th {
+        background-color: #0F172A;
+        color: #94A3B8;
+        border-bottom-color: #334155;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+    }
+
+    #predictions .data-table td {
+        color: #F1F5F9;
+        border-bottom-color: #334155;
+    }
+
+    #predictions .data-table tbody tr {
+        background-color: #1E293B;
+    }
+
+    #predictions .data-table tbody tr:hover td {
+        background-color: #334155;
+    }
+
+    /* Brighter badges in dark mode */
+    .pred-purple {
+        background: rgba(139, 92, 246, 0.2);
+        color: #c4b5fd;
+    }
+
+    .pred-blue {
+        background: rgba(59, 130, 246, 0.2);
+        color: #93c5fd;
+    }
+
+    .pred-amber {
+        background: rgba(245, 158, 11, 0.2);
+        color: #fcd34d;
+    }
+
+    .pred-green {
+        background: rgba(74, 222, 128, 0.18);
+        color: #4ade80;
+    }
+
+    /* Confidence badges in dark */
+    .conf-high {
+        background: rgba(74, 222, 128, 0.15);
+        color: #4ade80;
+    }
+
+    .conf-med {
+        background: rgba(251, 191, 36, 0.15);
+        color: #fbbf24;
+    }
+
+    .conf-low {
+        background: rgba(248, 113, 113, 0.15);
+        color: #f87171;
+    }
+
+    /* Summary cards dark */
+    #predictions .stat-card h3 {
+        font-size: 0.78rem;
+    }
+
+    #predictions .stat-card .stat-value {
+        color: #F1F5F9 !important;
+        font-size: 1.3rem !important;
+    }
+
+    /* Live dot text color */
+    #pred-last-updated {
+        color: #64748b;
+    }
+
+    /* Horizontal scroll shadow hint for table */
+    #predictions .table-container {
+        box-shadow: inset -10px 0 10px -10px rgba(0, 0, 0, 0.6);
+    }
+}
+
+/* Tablet Override (600px - 1024px) */
+@media (min-width: 600px) and (max-width: 1024px) {
+    .product-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+
+    .billing-sidebar.mobile-slide-panel {
+        width: 70%;
+        /* Partial view */
+        box-shadow: -4px 0 15px rgba(0, 0, 0, 0.5);
+    }
+}
+
+/* Fix for Sale Table Text Visibility on Mobile */
+@media (max-width: 1024px) {
+    .sales-table tr {
+        background-color: #1E293B;
+        /* Dark background for rows */
+        color: #F1F5F9;
+        /* Light text */
+        border-bottom-color: #334155;
+    }
+
+    .sales-table td {
+        color: #F1F5F9;
+        border-bottom: 1px solid #334155;
+    }
+
+    /* Ensure even/odd stripes if any are dark too */
+    .sales-table tr:nth-child(even) {
+        background-color: #1E293B;
+        /* Or slightly lighter/darker? Let's keep flat for now or use rgba */
+        background-color: rgba(30, 41, 59, 0.7);
+    }
+
+    .sales-table tr:hover {
+        background-color: #334155;
+    }
+
+    /* Fix View Items button in Dark Mode */
+    .sales-table .action-btn.small {
+        background-color: #334155;
+        border: 1px solid #475569;
+        color: #F1F5F9;
+    }
+}
+
+
+/* Redesign Sales Filters for Mobile/Tablet */
+@media (max-width: 1024px) {
+    .sales-controls {
+        align-items: stretch;
+        width: 100%;
+        /* FORCE FULL WIDTH */
+        gap: 0.5rem;
+    }
+
+    .sales-controls>.control-group {
+        width: 100%;
+    }
+
+    /* Row 1: Payment & Sort Dropdowns */
+    .sales-controls>.control-group:first-child {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        gap: 0.5rem;
+    }
+
+    .sales-controls>.control-group:first-child select {
+        width: auto;
+        flex: 1;
+        /* Grow evenly */
+        min-width: 0;
+    }
+
+    /* Fix Row 3: Bill Search Input */
+    /* It is last child of .expanded-filters */
+    .expanded-filters #sales-search-bill {
+        width: 100%;
+        margin-top: 0.5rem !important;
+        /* Spacing from Row 2 */
+        margin-left: 0 !important;
+    }
+
+    /* Ensure Expanded Filters container flows vertically */
+    .expanded-filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+
+    /* Expand Period Filter (Row 2) */
+    /* Expand Period Filter (Row 2) - Stack Label */
+    .mobile-dashboard-filter {
+        display: flex;
+        flex-direction: column;
+        /* Stack label above */
+        align-items: stretch;
+        /* Full width */
+        gap: 0.25rem;
+    }
+
+    .mobile-dashboard-filter .mobile-select-wrapper {
+        width: 100%;
+        /* Full width */
+        flex: none;
+    }
+
+    .mobile-dashboard-filter select {
+        width: 100%;
+        display: block;
+    }
+
+    .mobile-input-label {
+        font-size: 0.85rem;
+        color: #94A3B8;
+        margin-left: 2px;
+    }
+
+    /* Ensure table sticks to bottom of filters */
+    .sales-table-container {
+        margin-top: 0.5rem;
+    }
+
+    /* Match Filter Styles (Gray Bg, White Text) */
+    .sales-controls select,
+    .sales-controls input,
+    .expanded-filters input {
+        background-color: #1E293B;
+        color: #F1F5F9;
+        border: 1px solid #334155;
+    }
+
+    /* Placeholder color */
+    .sales-controls input::placeholder {
+        color: #94A3B8;
+        opacity: 0.7;
+    }
+
+    /* Fix Sales Table Container Background (Remove White Space) */
+    .sales-table-container {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Inventory Mobile Redesign */
+    #inventory .header-actions {
+        display: flex;
+        width: 100%;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    #inventory .header-actions .action-btn {
+        flex: 1;
+        width: 50%;
+        margin-left: 0;
+        background-color: #2563EB;
+        /* Primary Blue Force */
+        color: white;
+        border: none;
+        padding: 0.8rem;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    /* Inventory Search Spacing */
+    #inventory-search {
+        background-color: #1E293B !important;
+        /* Dark theme input */
+        color: #F1F5F9 !important;
+        border-color: #334155 !important;
+        margin-bottom: 1rem;
+    }
+
+    /* Inventory List Items */
+    .inventory-item {
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        margin-bottom: 0.75rem;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .inventory-item .item-info {
+        width: 100%;
+        justify-content: flex-start;
+        margin-bottom: 0.75rem;
+    }
+
+    .inventory-item h4 {
+        color: #F1F5F9;
+        font-size: 1rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .inventory-item .item-meta {
+        color: #94A3B8;
+        font-size: 0.85rem;
+    }
+
+    .inventory-item .item-actions {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        /* Spread buttons */
+        gap: 0.75rem;
+        border-top: 1px solid #334155;
+        padding-top: 0.75rem;
+        margin-top: 0;
+    }
+
+    .inventory-item .item-actions button {
+        flex: 1;
+        /* Full width touch targets */
+        background-color: #334155 !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #475569 !important;
+        padding: 0.6rem !important;
+        margin-left: 0 !important;
+        text-align: center;
+        justify-content: center;
+    }
+
+    .inventory-item .item-actions .btn-delete {
+        background-color: rgba(220, 38, 38, 0.2) !important;
+        /* Dark Red Transparent */
+        border-color: #7F1D1D !important;
+        color: #FCA5A5 !important;
+    }
+
+    /* Fix Inventory List Background (Remove White Space) */
+    .inventory-list {
+        background: transparent !important;
+        border: none !important;
+    }
+
+    /* Fix Unselected Tabs Visibility on Mobile */
+    .tab-pill {
+        background-color: #1E293B;
+        /* Dark background */
+        color: #94A3B8;
+        /* Grayish text for unselected */
+        border: 1px solid #334155;
+    }
+
+    .tab-pill.active {
+        background-color: #2563EB;
+        /* Primary Blue */
+        color: white;
+        border-color: #2563EB;
+    }
+
+    /* Billing Dark Theme (Search & Products) */
+    #billing-search {
+        background-color: #1E293B !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #334155 !important;
+    }
+
+    #billing-search::placeholder {
+        color: #94A3B8;
+        opacity: 0.7;
+    }
+
+    .product-card {
+        background-color: #1E293B !important;
+        border-color: #334155 !important;
+        height: auto !important;
+        /* Allow growing */
+        min-height: 100px;
+    }
+
+    .product-card h4,
+    .product-card h3 {
+        color: #F1F5F9 !important;
+    }
+
+    .product-card .price {
+        color: #4ADE80 !important;
+        /* Green money */
+    }
+
+    .card-image {
+        background-color: #0F172A !important;
+    }
+
+    /* Mobile Bill Action Bar Button */
+    .mobile-bill-action-bar .action-btn {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border-radius: 8px;
+        margin: 0;
+        background-color: #2563EB;
+    }
+
+    /* Slide Over Cart Items Dark Theme */
+    .cart-item {
+        background-color: #1E293B !important;
+        border: 1px solid #334155 !important;
+        color: #F1F5F9 !important;
+    }
+
+    .cart-item-name {
+        color: #F1F5F9 !important;
+    }
+
+    .qty-controls button {
+        background-color: #334155 !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #475569 !important;
+    }
+
+    .remove-btn {
+        color: #EF4444 !important;
+        /* Red X */
+    }
+
+    /* Settings Mobile Dark Theme */
+    .settings-card {
+        background-color: #1E293B !important;
+        border: 1px solid #334155 !important;
+        box-shadow: none !important;
+    }
+
+    .settings-card h3 {
+        color: #F1F5F9 !important;
+    }
+
+    .settings-card p {
+        color: #94A3B8 !important;
+    }
+
+    .settings-card input {
+        background-color: #0F172A !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #334155 !important;
+    }
+
+    /* Darken Icons Background */
+    .settings-card>div>div:first-child {
+        background-color: #0F172A !important;
+        border: 1px solid #334155;
+    }
+
+    /* Ensure Add Staff btn is dark friendly */
+    #add-staff-form+button {
+        /* This targets 'Save' but not 'Add Staff' button which is usually .action-btn */
+    }
+
+    .employee-list-item {
+        background-color: #0F172A !important;
+        border: 1px solid #334155 !important;
+        color: #F1F5F9;
+    }
+
+    /* Style Save Name button on mobile to match Add Employee */
+    .save-name-btn {
+        background-color: white !important;
+        /* User said MATCH Add Employee. Add Employee is BLUE? */
+        /* Wait, screenshot usually shows Add Employee as blue but user said "same color cheme as add employee" */
+        /* In previous steps, "Add Tab" was made to match "Add Product" (Blue). */
+        /* "Add Employee" button in HTML has class `action-btn primary`. */
+        /* `action-btn` is white. `primary` is blue? */
+        /* Let's check `style.css` for `.action-btn.primary` or `.primary`. */
+        /* Usually primary is blue. */
+        /* However, looking at the user screenshot for SETTINGS (preferewnces), the "Save Name" button is WHITE. */
+        /* The USER REQUEST is: "in preferewnces use same color cheme as add employee to save name button." */
+        /* "Add Employee" button in the same screenshot (below) appears to be "+ Add Employee" which is likely BLUE. */
+        /* So user wants Save Name (currently white) to be BLUE? */
+        /* OR does he mean the "Employees" card has a button? */
+        /* "Save Name" button in screenshot is indeed WHITE. */
+        /* "Add Employee" button in screenshot is BLUE. */
+        /* So user wants Save Name to be BLUE. */
+        background-color: #2563EB !important;
+        color: white !important;
+        border: none !important;
+    }
+
+    /* Mobile Modals Dark Theme (Add Employee, etc) */
+    .modal {
+        background-color: #1E293B !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #334155 !important;
+    }
+
+    .modal h2 {
+        color: #F1F5F9 !important;
+    }
+
+    .modal label {
+        color: #CBD5E1 !important;
+    }
+
+    .modal input {
+        background-color: #0F172A !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #334155 !important;
+    }
+
+    .modal .cancel-btn {
+        background-color: #334155 !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #475569 !important;
+    }
+}
+
+/* Global Toast Notification */
+#toast-notification {
+    position: fixed;
+    bottom: 80px;
+    /* Above mobile action bar */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #334155;
+    color: #F1F5F9;
+    padding: 0.8rem 1.5rem;
+    border-radius: 50px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 99999;
+    font-weight: 500;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+#toast-notification.hidden {
+    display: none !important;
+}
+
+@media (min-width: 1025px) {
+    #toast-notification {
+        bottom: 2rem;
+    }
+}
+
+@media (max-width: 1024px) {
+
+    /* --- Mobile Auth Dark Theme --- */
+    .auth-wrapper {
+        background-color: #0F172A !important;
+    }
+
+    .auth-card {
+        background-color: #1E293B !important;
+        border-color: #334155 !important;
+    }
+
+    .auth-title,
+    .auth-card h1 {
+        color: #F8FAFC !important;
+    }
+
+    .form-group label {
+        color: #F1F5F9 !important;
+    }
+
+    .form-group input {
+        background-color: #334155 !important;
+        border-color: #475569 !important;
+        color: #F8FAFC !important;
+    }
+
+    .form-group input::placeholder {
+        color: #94A3B8 !important;
+    }
+
+    .auth-footer {
+        color: #E2E8F0 !important;
+    }
+
+    .highlight {
+        color: #3B82F6 !important;
+    }
+
+    .dev-otp-section {
+        background: #334155 !important;
+        color: #E2E8F0 !important;
+        border: 1px solid #475569 !important;
+    }
+
+    .dev-otp-section label {
+        color: #CBD5E1 !important;
+    }
+}
+/* Undo Bill Styling */
+.row-undone {
+    background-color: #ffebee !important;
+    color: #c62828 !important;
+}
+.row-undone td {
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+.row-undone td:last-child, .row-undone td:first-child {
+    text-decoration: none; /* Keep action column and bill number readable */
+}
+.badge-undone {
+    background-color: #c62828;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 4px;
+}
+.undo-notes-text {
+    font-size: 0.75rem;
+    color: #b71c1c;
+    display: block;
+    margin-top: 4px;
+    max-width: 150px;
+}
+.action-btn.danger {
+    background: #e53935;
+    color: white;
+}
+.action-btn.danger:hover {
+    background: #b71c1c;
+}
+
