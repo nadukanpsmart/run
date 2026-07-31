@@ -523,7 +523,9 @@
                             <input type="text" id="customer-name" placeholder="Customer Name"
                                 style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
                             <input type="text" id="customer-phone" placeholder="Customer Phone"
-                                style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
+                                style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
+                            <input type="text" id="customer-gstin" placeholder="Customer GSTIN (Optional)"
+                                style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit; text-transform: uppercase;">
                         </div>
 
                         <div class="payment-mode">
@@ -835,6 +837,35 @@
                         </div>
 
 
+                    </div>
+
+                    <!-- WhatsApp Automated Gateway Section -->
+                    <div id="settings-whatsapp-card" class="settings-card"
+                        style="background: var(--bg-surface); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); margin-top: 1.5rem;">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <div
+                                style="width: 50px; height: 50px; background: #DCFCE7; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #16A34A; font-size: 1.5rem;">
+                                💬</div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Automated WhatsApp Gateway</h3>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">Auto-send receipts via WhatsApp API (Ultramsg, Green API, Wati, etc.)</p>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label>Gateway API URL</label>
+                            <input type="text" id="pref-wa-url" placeholder="https://api.ultramsg.com/INSTANCE_ID/messages/chat" style="width: 100%;">
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">e.g. Ultramsg, Green API, Twilio, or custom API webhook URL</span>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label>API Token / Key</label>
+                            <input type="password" id="pref-wa-token" placeholder="Your API Token / Secret Key" style="width: 100%;">
+                        </div>
+
+                        <div style="text-align: right;">
+                            <button id="btn-save-wa-settings" class="action-btn primary" style="width: auto; background: #16A34A; border-color: #16A34A;">Save WhatsApp Settings</button>
+                        </div>
                     </div>
 
                     <!-- Employee Section -->

@@ -398,6 +398,9 @@ function renderSales(bills) {
         } else if (bill.customer_phone) {
             customerDisplay = bill.customer_phone;
         }
+        if (bill.customer_gstin) {
+            customerDisplay = customerDisplay !== 'N/A' ? `${customerDisplay} | GSTIN: ${bill.customer_gstin}` : `GSTIN: ${bill.customer_gstin}`;
+        }
 
         // Actions
         let actionHtml = '';
@@ -457,6 +460,54 @@ async function reprintBill(billId) {
     } catch (err) {
         console.error('Error fetching bill for reprint:', err);
         alert('Could not load bill details for printing.');
+    }
+}
+
+
+async function sendBackgroundWhatsApp(bill, items) {
+    if (!bill || !bill.customer_phone) return;
+
+    const waUrl = localStorage.getItem('wa_gateway_url') || authState.owner?.whatsapp_gateway_url;
+    const waToken = localStorage.getItem('wa_gateway_token') || authState.owner?.whatsapp_gateway_token;
+
+    let phoneNum = bill.customer_phone.replace(/\D/g, '');
+    if (phoneNum.length === 10) phoneNum = '91' + phoneNum;
+
+    let storeName = authState.owner?.preferred_store_name || authState.owner?.business_name || "Na Dukan";
+    let msg = "*🧾 Receipt from " + storeName + "*\n";
+    msg += "Bill No: " + (bill.bill_number || bill.id.slice(0, 8)) + "\n\n";
+    msg += "*Items:*\n";
+    items.forEach(i => {
+        const qty = i.quantity || i.qty || 1;
+        const price = i.price || i.product?.price || 0;
+        const pName = i.product_name || i.product?.name || 'Item';
+        msg += "- " + pName + " x" + qty + " = ₹" + (qty * price).toFixed(2) + "\n";
+    });
+    msg += "\n*Total: ₹" + (bill.final_amount || bill.subtotal || 0).toFixed(2) + "*\n";
+    msg += "Mode: " + (bill.payment_mode || 'CASH') + "\n\n";
+    msg += "Thank you for your visit!";
+
+    if (waUrl && waToken) {
+        try {
+            console.log("Sending automatic WhatsApp message via Gateway API...");
+            await fetch(waUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: waToken,
+                    to: phoneNum,
+                    body: msg
+                })
+            });
+            showToast("WhatsApp receipt sent automatically!");
+        } catch (err) {
+            console.error("Auto WhatsApp Gateway failed:", err);
+        }
+    } else {
+        // Fallback: Open WhatsApp URL in background/new tab if phone is present
+        const encodeMsg = encodeURIComponent(msg);
+        const waLink = "https://wa.me/" + phoneNum + "?text=" + encodeMsg;
+        window.open(waLink, '_blank');
     }
 }
 
@@ -1067,7 +1118,7 @@ function renderBilling() {
         card.innerHTML = `
             ${imageHtml}
             <div class="card-details">
-                <h4>${p.name}</h4>
+                <h4 title="${p.name}">${p.name}</h4>
                 ${stockInfo}
                 <div class="card-footer">
                     <span class="price">₹${p.price}</span>
@@ -1103,6 +1154,40 @@ function addToCart(productId) {
     renderCart();
 }
 
+function getItemUnitPrice(item) {
+    return (item.customPrice !== undefined && item.customPrice !== null) ? item.customPrice : item.product.price;
+}
+
+function editItemSpecialPrice(index) {
+    const item = appState.cart[index];
+    if (!item) return;
+
+    const currentPrice = getItemUnitPrice(item);
+    const input = prompt(`Enter special price per piece for "${item.product.name}":\n(Original Price: ₹${item.product.price})`, currentPrice);
+
+    if (input === null) return; // User cancelled
+
+    const val = input.trim();
+    if (val === '') {
+        delete item.customPrice;
+        showToast("Price reset to original");
+    } else {
+        const newPrice = parseFloat(val);
+        if (isNaN(newPrice) || newPrice < 0) {
+            alert('Please enter a valid non-negative price');
+            return;
+        }
+        if (newPrice === item.product.price) {
+            delete item.customPrice;
+            showToast("Price reset to original");
+        } else {
+            item.customPrice = newPrice;
+            showToast(`Special price set: ₹${newPrice}/pc`);
+        }
+    }
+    renderCart();
+}
+
 function renderCart() {
     const container = document.getElementById('cart-items');
     container.innerHTML = '';
@@ -1111,11 +1196,18 @@ function renderCart() {
         container.innerHTML = '<div class="empty-cart">Cart is empty</div>';
     } else {
         appState.cart.forEach((item, index) => {
+            const unitPrice = getItemUnitPrice(item);
+            const isSpecial = item.customPrice !== undefined && item.customPrice !== null;
+            const priceHtml = isSpecial 
+                ? `<span style="color:#2563EB; font-weight:700;">₹${unitPrice}</span> <s style="font-size:0.75rem; color:#94A3B8;">₹${item.product.price}</s>`
+                : `₹${unitPrice}`;
+
             const div = document.createElement('div');
             div.className = 'cart-item';
             div.innerHTML = `
-                <div class="cart-item-name">${item.product.name} (₹${item.product.price})</div>
+                <div class="cart-item-name" title="${item.product.name}">${item.product.name} (${priceHtml})</div>
                 <div class="qty-controls">
+                    <button class="special-price-btn ${isSpecial ? 'active' : ''}" onclick="editItemSpecialPrice(${index})" title="${isSpecial ? 'Special Price Active: ₹' + unitPrice + ' (Click to edit)' : 'Give Special Price'}">🏷️</button>
                     <button class="qty-btn" onclick="updateCartQty(${index}, -1)">-</button>
                     <span>${item.qty}</span>
                     <button class="qty-btn" onclick="updateCartQty(${index}, 1)">+</button>
@@ -1157,7 +1249,7 @@ function removeFromCart(index) {
 }
 
 function calculateTotals() {
-    const subtotal = appState.cart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
+    const subtotal = appState.cart.reduce((sum, item) => sum + (getItemUnitPrice(item) * item.qty), 0);
 
     let discountType = document.getElementById('discount-type').value;
     let discountValue = parseFloat(document.getElementById('discount-value').value) || 0;
@@ -1183,7 +1275,7 @@ async function generateBill() {
         return;
     }
 
-    const subtotal = appState.cart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
+    const subtotal = appState.cart.reduce((sum, item) => sum + (getItemUnitPrice(item) * item.qty), 0);
     const discountType = document.getElementById('discount-type').value;
     const discountValue = parseFloat(document.getElementById('discount-value').value) || 0;
 
@@ -1195,31 +1287,71 @@ async function generateBill() {
     const paymentMode = document.querySelector('input[name="paymode"]:checked').value;
     const customerName = document.getElementById('customer-name').value.trim();
     const customerPhone = document.getElementById('customer-phone').value.trim();
+    const customerGstin = (document.getElementById('customer-gstin')?.value || '').trim().toUpperCase();
 
-    // Generate Bill Number on Client side to optimize speed and avoid DB Sequence issues
-    // Format: StoreInitials-Date-ShortRandom
+    // Generate Bill Number: Today's Date YYMMDD + Continuous Sequence ps001, ps002, ps003...
     const now = new Date();
-    const dateStr = `${now.getFullYear().toString().substr(-2)}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
-    const randomStr = Math.floor(1000 + Math.random() * 9000).toString();
-    const billNumber = `${dateStr}-${randomStr}`;
+    const dateStr = `${now.getFullYear().toString().slice(-2)}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+
+    let nextSeq = 1;
+    try {
+        const { data: existingBills } = await supabase
+            .from('bills')
+            .select('bill_number')
+            .eq('tenant_id', authState.owner.tenant_id)
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+        if (existingBills && existingBills.length > 0) {
+            let maxNum = 0;
+            existingBills.forEach(b => {
+                if (b.bill_number) {
+                    const match = b.bill_number.match(/-ps(\d+)$/i);
+                    if (match && match[1]) {
+                        const numPart = parseInt(match[1], 10);
+                        if (!isNaN(numPart) && numPart > maxNum) {
+                            maxNum = numPart;
+                        }
+                    }
+                }
+            });
+            nextSeq = maxNum + 1;
+        }
+    } catch (err) {
+        console.error("Error generating bill sequence", err);
+    }
+
+    const seqStr = nextSeq < 1000 ? nextSeq.toString().padStart(3, '0') : nextSeq.toString();
+    const billNumber = `${dateStr}-ps${seqStr}`;
 
     // 1. Insert Bill
-    const { data: billData, error: billError } = await supabase
+    const billPayload = {
+        subtotal,
+        discount_type: discountType,
+        discount_value: discountValue,
+        final_amount: final,
+        payment_mode: paymentMode,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        customer_gstin: customerGstin,
+        bill_number: billNumber,
+        tenant_id: authState.owner.tenant_id,
+        created_by: authState.owner.id
+    };
+
+    let { data: billData, error: billError } = await supabase
         .from('bills')
-        .insert([{
-            subtotal,
-            discount_type: discountType,
-            discount_value: discountValue,
-            final_amount: final,
-            payment_mode: paymentMode,
-            customer_name: customerName,
-            customer_phone: customerPhone,
-            bill_number: billNumber,
-            tenant_id: authState.owner.tenant_id,
-            created_by: authState.owner.id
-        }])
+        .insert([billPayload])
         .select()
         .single();
+
+    if (billError && billError.message && billError.message.includes('customer_gstin')) {
+        delete billPayload.customer_gstin;
+        const res = await supabase.from('bills').insert([billPayload]).select().single();
+        billData = res.data;
+        billError = res.error;
+        if (billData) billData.customer_gstin = customerGstin;
+    }
 
     if (billError) {
         alert('Error saving bill: ' + billError.message);
@@ -1233,7 +1365,7 @@ async function generateBill() {
         product_id: item.product.id,
         product_name: item.product.name,
         quantity: item.qty,
-        price: item.product.price,
+        price: getItemUnitPrice(item),
         tenant_id: authState.owner.tenant_id
     }));
 
@@ -1581,7 +1713,10 @@ function showBillPreview(bill, items) {
             <div class="a4-meta">
                 <div class="left">
                     <strong>Invoice No:</strong> ${billDisplay}<br>
-                    <strong>Payment Mode:</strong> ${bill.payment_mode}
+                    <strong>Payment Mode:</strong> ${bill.payment_mode}<br>
+                    ${bill.customer_name ? `<strong>Customer:</strong> ${bill.customer_name}<br>` : ''}
+                    ${bill.customer_phone ? `<strong>Phone:</strong> ${bill.customer_phone}<br>` : ''}
+                    ${bill.customer_gstin ? `<strong>GSTIN:</strong> ${bill.customer_gstin}<br>` : ''}
                 </div>
                 <div class="center-label">TAX INVOICE</div>
                 <div class="right">
@@ -1764,6 +1899,12 @@ function showBillPreview(bill, items) {
                 <span>B.No:${billDisplay}</span>
                 <span>${dateStr} ${timeStr}</span>
               </div>
+              ${(bill.customer_name || bill.customer_phone || bill.customer_gstin) ? `
+              <div style="font-size: 11px; margin-top: 2px;">
+                ${bill.customer_name ? `<div>Cust: ${bill.customer_name}</div>` : ''}
+                ${bill.customer_phone ? `<div>Phone: ${bill.customer_phone}</div>` : ''}
+                ${bill.customer_gstin ? `<div>GSTIN: ${bill.customer_gstin}</div>` : ''}
+              </div>` : ''}
 
               <div class="divider"></div>
 
@@ -1846,6 +1987,7 @@ function closeBillPreview() {
     // Reset Customer Inputs
     document.getElementById('customer-name').value = '';
     document.getElementById('customer-phone').value = '';
+    if (document.getElementById('customer-gstin')) document.getElementById('customer-gstin').value = '';
 
     renderCart();
 
@@ -2980,6 +3122,23 @@ async function loadSettings() {
             if (formatInput) {
                 formatInput.value = user.preferred_bill_format || '57mm';
             }
+            const waUrlInput = document.getElementById('pref-wa-url');
+            const waTokenInput = document.getElementById('pref-wa-token');
+            if (waUrlInput) waUrlInput.value = localStorage.getItem('wa_gateway_url') || user.whatsapp_gateway_url || '';
+            if (waTokenInput) waTokenInput.value = localStorage.getItem('wa_gateway_token') || user.whatsapp_gateway_token || '';
+            
+            const btnSaveWa = document.getElementById('btn-save-wa-settings');
+            if (btnSaveWa) {
+                btnSaveWa.onclick = async () => {
+                    const u = waUrlInput.value.trim();
+                    const t = waTokenInput.value.trim();
+                    localStorage.setItem('wa_gateway_url', u);
+                    localStorage.setItem('wa_gateway_token', t);
+                    // Try saving to DB as well
+                    await supabase.from('owners').update({ whatsapp_gateway_url: u, whatsapp_gateway_token: t }).eq('id', user.id);
+                    showToast("WhatsApp Gateway Settings Saved!");
+                };
+            }
 
             // Show existing logo if available
             if (user.preferred_logo && logoContainer) {
@@ -4101,13 +4260,14 @@ async function exportSalesCSV() {
     const validExportBills = bills.filter(b => !b.is_undone);
     bills = validExportBills;
 
-    const headers = ["Bill Number", "Date", "Customer Name", "Customer Phone", "Payment Mode", "Subtotal", "Discount Type", "Discount Value", "Final Amount"];
+    const headers = ["Bill Number", "Date", "Customer Name", "Customer Phone", "Customer GSTIN", "Payment Mode", "Subtotal", "Discount Type", "Discount Value", "Final Amount"];
     let csvContent = headers.join(",") + "\n";
 
     bills.forEach(b => {
         const dateStr = b.created_at ? new Date(b.created_at).toLocaleString().replace(/,/g, '') : '';
         const cName = b.customer_name ? b.customer_name.replace(/"/g, '""') : "";
         const cPhone = b.customer_phone ? b.customer_phone.replace(/"/g, '""') : "";
+        const cGstin = b.customer_gstin ? b.customer_gstin.replace(/"/g, '""') : "";
         const bNum = b.bill_number ? b.bill_number.replace(/"/g, '""') : "";
 
         const row = [
@@ -4115,6 +4275,7 @@ async function exportSalesCSV() {
             `"${dateStr}"`,
             `"${cName}"`,
             `"${cPhone}"`,
+            `"${cGstin}"`,
             `"${b.payment_mode || 'CASH'}"`,
             b.subtotal || 0,
             `"${b.discount_type || 'none'}"`,

@@ -67,6 +67,7 @@ CREATE TABLE public.bills (
     final_amount NUMERIC DEFAULT 0,
     customer_name TEXT,
     customer_phone TEXT,
+    customer_gstin TEXT,
     is_undone BOOLEAN DEFAULT false,
     undo_notes TEXT,
     created_by UUID REFERENCES public.owners(id),
