@@ -172,6 +172,8 @@ async function showApp() {
     // Load data
     if (window.updateBranding) window.updateBranding();
     loadInventory();
+    if (typeof loadCustomers === 'function') loadCustomers();
+    if (typeof loadSuppliers === 'function') loadSuppliers();
     loadDashboard('today');
 
     // FIX: Start global sales realtime listener so new bills from ANY device update the UI live

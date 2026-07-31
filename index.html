@@ -161,12 +161,25 @@
                     onclick="switchView('analysis'); toggleMobileMenu()">Data Analysis</button>
                 <button id="drawer-link-billing" class="drawer-link"
                     onclick="switchView('billing'); toggleMobileMenu()">Billing</button>
+                <div style="padding: 1rem 1.5rem 0.5rem 1.5rem; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Purchases</div>
+                <button id="drawer-link-purchases" class="drawer-link" style="padding-left: 2.5rem;"
+                    onclick="switchView('purchases'); toggleMobileMenu()">New Purchase</button>
+                <button id="drawer-link-purchase-history" class="drawer-link" style="padding-left: 2.5rem;"
+                    onclick="switchView('purchase-history'); toggleMobileMenu()">View Purchases</button>
                 <button id="drawer-link-sales" class="drawer-link"
                     onclick="switchView('sales'); toggleMobileMenu()">Sales</button>
                 <button id="drawer-link-inventory" class="drawer-link"
                     onclick="switchView('inventory'); toggleMobileMenu()">Inventory</button>
-                <button id="drawer-link-employees" class="drawer-link"
+                
+                <div style="padding: 1rem 1.5rem 0.5rem 1.5rem; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Accounts</div>
+                <button id="drawer-link-customers" class="drawer-link" style="padding-left: 2.5rem;"
+                    onclick="switchView('customers'); toggleMobileMenu()">Customers</button>
+                <button id="drawer-link-employees" class="drawer-link" style="padding-left: 2.5rem;"
                     onclick="switchView('employees'); toggleMobileMenu()">Employees</button>
+                <button id="drawer-link-suppliers" class="drawer-link" style="padding-left: 2.5rem;"
+                    onclick="switchView('suppliers'); toggleMobileMenu()">Suppliers</button>
+
+                <div style="padding: 1rem 1.5rem 0.5rem 1.5rem; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">System</div>
                 <button id="drawer-link-predictions" class="drawer-link"
                     onclick="switchView('predictions'); toggleMobileMenu()">Predictions</button>
                 <button id="drawer-link-settings" class="drawer-link"
@@ -189,9 +202,25 @@
                 <button class="nav-btn active" onclick="switchView('dashboard')">Dashboard</button>
                 <button class="nav-btn" onclick="switchView('analysis')">Data Analysis</button>
                 <button class="nav-btn" onclick="switchView('billing')">Billing</button>
+                <div class="nav-dropdown">
+                    <button class="nav-btn dropdown-btn">Purchases <span style="font-size: 0.7em;">▼</span></button>
+                    <div class="dropdown-content">
+                        <button class="nav-btn" onclick="switchView('purchases')">New Purchase</button>
+                        <button class="nav-btn" onclick="switchView('purchase-history')">View Purchases</button>
+                    </div>
+                </div>
                 <button class="nav-btn" onclick="switchView('sales')">Sales</button>
                 <button class="nav-btn" onclick="switchView('inventory')">Inventory</button>
-                <button class="nav-btn" onclick="switchView('employees')">Employees</button>
+                
+                <div class="nav-dropdown">
+                    <button class="nav-btn dropdown-btn">Accounts <span style="font-size: 0.7em;">▼</span></button>
+                    <div class="dropdown-content">
+                        <button class="nav-btn" onclick="switchView('customers')">Customers</button>
+                        <button class="nav-btn" onclick="switchView('employees')">Employees</button>
+                        <button class="nav-btn" onclick="switchView('suppliers')">Suppliers</button>
+                    </div>
+                </div>
+
                 <button class="nav-btn" onclick="switchView('predictions')">Predictions</button>
                 <button class="nav-btn" onclick="switchView('settings')">Settings</button>
             </div>
@@ -266,6 +295,14 @@
                     <div class="stat-card">
                         <h3>Total Bills</h3>
                         <p class="stat-value" id="stat-bill-count">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>To Pay Suppliers</h3>
+                        <p class="stat-value" id="stat-to-pay-suppliers">₹0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>To Receive from Customers</h3>
+                        <p class="stat-value" id="stat-to-receive-customers">₹0</p>
                     </div>
                 </div>
 
@@ -422,6 +459,189 @@
             </div>
         </section>
 
+        <!-- Purchases View -->
+        <section id="purchases" class="view hidden">
+            <header class="view-header">
+                <h1>Inward Purchases</h1>
+            </header>
+            <div class="split-layout">
+                <div class="left-pane" style="flex: 1;">
+                    <!-- Supplier Details -->
+                    <div class="card" style="margin-bottom: 1.5rem;">
+                        <h2 class="card-title">Supplier Details</h2>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <div class="form-group autocomplete-wrapper" style="margin-bottom: 0;">
+                                <label>Supplier Name *</label>
+                                <input type="text" id="purchase-supplier-name" placeholder="Supplier Name">
+                                <div id="supplier-suggestions" class="suggestions-dropdown hidden"></div>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Supplier Phone</label>
+                                <input type="text" id="purchase-supplier-phone" placeholder="Phone">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>GSTIN</label>
+                                <input type="text" id="purchase-supplier-gstin" placeholder="GSTIN (Optional)" style="text-transform: uppercase;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0; grid-column: 1 / -1;">
+                                <label>Address</label>
+                                <textarea id="purchase-supplier-address" rows="2" placeholder="Address" style="width:100%; border:1px solid var(--border-color); border-radius:6px; padding:0.5rem; resize:vertical; font-family:inherit;"></textarea>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Invoice Date</label>
+                                <input type="date" id="purchase-invoice-date">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Invoice Number</label>
+                                <input type="text" id="purchase-invoice-number" placeholder="Invoice #">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Entry Date *</label>
+                                <input type="date" id="purchase-entry-date" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Item Entry Form -->
+                    <div class="card">
+                        <h2 class="card-title">Add Purchase Item</h2>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>UPC / Barcode</label>
+                                <input type="text" id="purchase-item-upc" placeholder="Scan or type">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Product Name *</label>
+                                <input type="text" id="purchase-item-name" placeholder="Name">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Bought Qty *</label>
+                                <input type="number" id="purchase-item-bought-qty" min="0" value="1" oninput="updatePurchaseItemCalc()">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Free Qty</label>
+                                <input type="number" id="purchase-item-free-qty" min="0" value="0" oninput="updatePurchaseItemCalc()">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Total Qty</label>
+                                <input type="number" id="purchase-item-total-qty" disabled style="background:var(--bg-secondary); cursor:not-allowed;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Expiry Date</label>
+                                <input type="date" id="purchase-item-expiry">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Bought Price *</label>
+                                <input type="number" id="purchase-item-bought-price" min="0" step="0.01" value="0" oninput="updatePurchaseItemCalc()">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Selling Price *</label>
+                                <input type="number" id="purchase-item-selling-price" min="0" step="0.01" value="0">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Discount (₹)</label>
+                                <input type="number" id="purchase-item-discount" min="0" step="0.01" value="0" oninput="updatePurchaseItemCalc()">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Amount (₹)</label>
+                                <input type="number" id="purchase-item-amount" disabled style="background:var(--bg-secondary); cursor:not-allowed; font-weight:bold;">
+                            </div>
+                        </div>
+                        <button class="action-btn primary" style="margin-top: 1rem;" onclick="addPurchaseItem()">Add Item to Slip</button>
+                    </div>
+                </div>
+
+                <!-- Slip Cart Section -->
+                <div class="right-pane" style="flex: 0 0 450px;">
+                    <div class="card bill-card" style="height: 100%; display: flex; flex-direction: column;">
+                        <h2 class="card-title">Purchase Slip Items</h2>
+                        <div class="bill-items-container" id="purchase-cart-items" style="flex: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; margin-bottom: 1rem;">
+                            <!-- Items go here -->
+                        </div>
+                        <div class="bill-totals" style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                                <span>Total Items:</span>
+                                <strong id="purchase-cart-total-items">0</strong>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-size:1.2rem; font-weight:bold;">
+                                <span>Total Amount:</span>
+                                <span>₹<span id="purchase-cart-total-amount">0.00</span></span>
+                            </div>
+                            <button class="action-btn primary full-width" style="margin-top: 1rem; padding: 0.8rem; font-size:1rem;" onclick="savePurchaseSlip()">Save Purchase Slip</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Customers View -->
+        <section id="customers" class="view hidden">
+            <header class="view-header">
+                <h1>Customers</h1>
+                <div class="header-actions">
+                    <button class="action-btn primary" onclick="openAddCustomerModal()">+ Add Customer</button>
+                </div>
+            </header>
+
+            <div style="margin-bottom: 1rem;">
+                <input type="text" id="customers-search" placeholder="Search customers by name or phone..."
+                    oninput="renderCustomers()"
+                    style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background: var(--bg-surface); color: var(--text-primary);">
+            </div>
+
+            <div class="sales-table-container">
+                <table class="sales-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>GSTIN</th>
+                            <th>Address</th>
+                            <th>Balance</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customers-table-body">
+                        <!-- Customers injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Suppliers View -->
+        <section id="suppliers" class="view hidden">
+            <header class="view-header">
+                <h1>Suppliers</h1>
+                <div class="header-actions">
+                    <button class="action-btn primary" onclick="openAddSupplierModal()">+ Add Supplier</button>
+                </div>
+            </header>
+
+            <div style="margin-bottom: 1rem;">
+                <input type="text" id="suppliers-search" placeholder="Search suppliers by name or phone..."
+                    oninput="renderSuppliers()"
+                    style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background: var(--bg-surface); color: var(--text-primary);">
+            </div>
+
+            <div class="sales-table-container">
+                <table class="sales-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>GSTIN</th>
+                            <th>Address</th>
+                            <th>Balance</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="suppliers-table-body">
+                        <!-- Suppliers injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- Employees View -->
         <section id="employees" class="view hidden">
             <header class="view-header">
@@ -516,19 +736,26 @@
                             <span id="bill-total">₹0.00</span>
                         </div>
 
-                        <div class="customer-info" style="margin-bottom: 1rem;">
-                            <label
-                                style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; display: block; color: var(--text-primary);">Customer
-                                Details</label>
-                            <input type="text" id="customer-name" placeholder="Customer Name"
-                                style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
+                        <details id="customer-details-accordion" class="customer-info" style="margin-bottom: 1rem;">
+                            <summary style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary); cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;">
+                                Customer Details 
+                                <span style="font-size: 0.8em; opacity: 0.5;">▼</span>
+                            </summary>
+                            <div style="margin-top: 0.5rem; position: relative;">
+                                <input type="text" id="customer-name" placeholder="Customer Name" autocomplete="off"
+                                    oninput="showCustomerSuggestions()" onfocus="showCustomerSuggestions()" onblur="hideCustomerSuggestionsDelay()"
+                                    style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
+                                <div id="customer-suggestions" class="hidden" style="position: absolute; top: calc(100% - 0.5rem); left: 0; width: 100%; max-height: 150px; overflow-y: auto; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 6px; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                    <!-- Suggestions injected here -->
+                                </div>
+                            </div>
                             <input type="text" id="customer-phone" placeholder="Customer Phone"
                                 style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
                             <input type="text" id="customer-gstin" placeholder="Customer GSTIN (Optional)"
                                 style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit; text-transform: uppercase;">
                             <textarea id="customer-address" rows="3" placeholder="Customer Address&#10;Line 1&#10;Line 2&#10;Line 3&#10;Line 4"
                                 style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit; font-size: 0.85rem; resize: vertical;"></textarea>
-                        </div>
+                        </details>
 
                         <div class="payment-mode">
                             <label>Payment Mode</label>
@@ -546,6 +773,41 @@
         </section>
 
         <!-- Sales View -->
+        <section id="purchase-history" class="view hidden">
+            <header class="view-header">
+                <h1>Purchase History</h1>
+                <div class="sales-controls">
+                    <div class="control-group expanded-filters" style="flex-wrap: wrap;">
+                        <input type="date" id="purchase-history-date-from" placeholder="From">
+                        <span class="separator">to</span>
+                        <input type="date" id="purchase-history-date-to" placeholder="To">
+                        <input type="text" id="purchase-history-supplier" placeholder="Search Supplier" oninput="renderPurchaseHistory()">
+                        <input type="text" id="purchase-history-invoice" placeholder="Invoice No" oninput="renderPurchaseHistory()">
+                        <button class="action-btn small" onclick="renderPurchaseHistory()">Filter</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="sales-table-container">
+                <table class="sales-table">
+                    <thead>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Entry Date</th>
+                            <th>Invoice Date</th>
+                            <th>Supplier</th>
+                            <th>Items</th>
+                            <th>Total Amount</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchase-history-table-body">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <section id="sales" class="view hidden">
             <header class="view-header">
                 <h1>Sales History</h1>
@@ -851,8 +1113,9 @@
                             <button id="btn-save-pref-all" class="action-btn primary" style="width: auto;">Save Bill
                                 Preferences</button>
                         </div>
-
-
+                        <div style="text-align: right; margin-top: 1rem; border-top: 1px dashed var(--border-color); padding-top: 1rem;">
+                            <button onclick="migrateExistingCustomers()" class="action-btn" style="width: auto; border: 1px solid var(--border-color); background: var(--bg-body); color: var(--text-primary);">Migrate Customers from Bills</button>
+                        </div>
                     </div>
 
                     <!-- WhatsApp Automated Gateway Section -->
@@ -957,6 +1220,10 @@
                     <input type="number" id="p-price" required min="0" step="0.01">
                 </div>
                 <div class="form-group">
+                    <label>UPC / Barcode (Optional)</label>
+                    <input type="text" id="p-upc" placeholder="Scan or enter barcode">
+                </div>
+                <div class="form-group">
                     <label>Stock</label>
                     <input type="number" id="p-stock" required min="0">
                 </div>
@@ -1005,6 +1272,10 @@
                 <div class="form-group">
                     <label>Price (₹)</label>
                     <input type="number" id="edit-p-price" required min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>UPC / Barcode (Optional)</label>
+                    <input type="text" id="edit-p-upc" placeholder="Scan or enter barcode">
                 </div>
                 <div class="form-group">
                     <label>Stock</label>
@@ -1117,6 +1388,10 @@
                 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
                     <div class="form-group" style="margin-bottom: 0;">
+                        <label>Bill Date & Time</label>
+                        <input type="datetime-local" id="edit-bill-date" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
                         <label>Customer Name</label>
                         <input type="text" id="edit-bill-customer-name" placeholder="Customer Name">
                     </div>
@@ -1190,6 +1465,120 @@
                     <button type="submit" class="save-btn primary">Save Changes</button>
                 </div>
             </form>
+        </div>
+
+        <!-- Customer Add/Edit Modal -->
+        <div class="modal hidden" id="modal-customer" style="max-width: 450px;">
+            <h2 id="modal-customer-title">Add Customer</h2>
+            <form id="customer-form">
+                <input type="hidden" id="customer-id">
+                <div class="form-group">
+                    <label>Customer Name *</label>
+                    <input type="text" id="customer-form-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="customer-form-phone">
+                </div>
+                <div class="form-group">
+                    <label>GSTIN</label>
+                    <input type="text" id="customer-form-gstin" style="text-transform: uppercase;">
+                </div>
+                <div class="form-group">
+                    <label>Address</label>
+                    <textarea id="customer-form-address" rows="3" style="resize: vertical;"></textarea>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <input type="number" id="customer-form-amount" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="customer-form-amount-type">
+                            <option value="">Select...</option>
+                            <option value="creditor">Creditor</option>
+                            <option value="debtor">Debtor</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="customer-form-notes" rows="2" style="resize: vertical;"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn primary">Save Customer</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="modal hidden" id="modal-supplier" style="max-width: 450px;">
+            <h2 id="modal-supplier-title">Add Supplier</h2>
+            <form id="supplier-form">
+                <input type="hidden" id="supplier-id">
+                <div class="form-group">
+                    <label>Supplier Name *</label>
+                    <input type="text" id="supplier-form-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="supplier-form-phone">
+                </div>
+                <div class="form-group">
+                    <label>GSTIN</label>
+                    <input type="text" id="supplier-form-gstin" style="text-transform: uppercase;">
+                </div>
+                <div class="form-group">
+                    <label>Address</label>
+                    <textarea id="supplier-form-address" rows="3" style="resize: vertical;"></textarea>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <input type="number" id="supplier-form-amount" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="supplier-form-amount-type">
+                            <option value="">Select...</option>
+                            <option value="creditor">Creditor</option>
+                            <option value="debtor">Debtor</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="supplier-form-notes" rows="2" style="resize: vertical;"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn primary">Save Supplier</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- History Modal -->
+        <div class="modal hidden" id="modal-history" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 id="modal-history-title" style="margin: 0;">History</h2>
+                <button class="action-btn small" onclick="closeModals()">Close</button>
+            </div>
+            <div style="overflow-y: auto; flex: 1;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Invoice / Bill No</th>
+                            <th>Amount</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-history-tbody">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
         </div>
 
     </div>

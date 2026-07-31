@@ -112,7 +112,7 @@ function switchView(viewId) {
     document.getElementById(viewId).classList.remove('hidden');
 
     // Highlight nav
-    const btn = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.getAttribute('onclick').includes(viewId));
+    const btn = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.getAttribute('onclick')?.includes(viewId));
     if (btn) btn.classList.add('active');
 
     // Update Section Indicator (Mobile)
@@ -120,8 +120,12 @@ function switchView(viewId) {
         'dashboard': 'Dashboard',
         'analysis': 'Data Analysis',
         'billing': 'Billing',
+        'purchases': 'Inward Purchases',
+        'purchase-history': 'Purchase History',
         'sales': 'Sales',
         'inventory': 'Inventory',
+        'customers': 'Customers',
+        'suppliers': 'Suppliers',
         'employees': 'Employees',
         'predictions': 'AI Predictions',
         'settings': 'Settings'
@@ -133,7 +137,7 @@ function switchView(viewId) {
 
     // Update active state in mobile drawer
     document.querySelectorAll('.drawer-link').forEach(el => el.classList.remove('active'));
-    const drawerLink = Array.from(document.querySelectorAll('.drawer-link')).find(b => b.getAttribute('onclick').includes(viewId));
+    const drawerLink = Array.from(document.querySelectorAll('.drawer-link')).find(b => b.getAttribute('onclick')?.includes(viewId));
     if (drawerLink) drawerLink.classList.add('active');
 
     // Refresh data if needed
@@ -142,6 +146,9 @@ function switchView(viewId) {
     if (viewId === 'dashboard') loadDashboard(appState.dashboardFilter);
     if (viewId === 'analysis') loadDashboard(appState.dashboardFilter);
     if (viewId === 'sales') loadSales();
+    if (viewId === 'purchase-history') renderPurchaseHistory();
+    if (viewId === 'customers') renderCustomers();
+    if (viewId === 'suppliers') renderSuppliers();
     if (viewId === 'settings') loadSettings();
     if (viewId === 'predictions') {
         loadPredictions(false);
@@ -702,7 +709,7 @@ function renderInventoryList() {
 
     if (query) {
         // Global Search (Starts With logic as requested)
-        filtered = appState.products.filter(p => p.name.toLowerCase().startsWith(query));
+        filtered = appState.products.filter(p => p.name.toLowerCase().startsWith(query) || (p.upc && p.upc.toLowerCase().includes(query)));
     } else {
         // Tab Filter
         filtered = appState.currentInventoryTab === 'all'
@@ -941,6 +948,7 @@ function openEditProduct(productId) {
     document.getElementById('edit-p-name').value = product.name;
     document.getElementById('edit-p-price').value = product.price;
     document.getElementById('edit-p-stock').value = product.stock;
+    document.getElementById('edit-p-upc').value = product.upc || '';
     document.getElementById('edit-p-house').checked = product.is_in_house;
 
     // Set initial visibility
@@ -989,6 +997,7 @@ document.getElementById('add-product-form').addEventListener('submit', async (e)
     const price = document.getElementById('p-price').value;
     const is_in_house = document.getElementById('p-house').checked;
     const stock = is_in_house ? 0 : (document.getElementById('p-stock').value || 0);
+    const upc = document.getElementById('p-upc').value.trim() || null;
 
     let tab_id = document.getElementById('p-tab').value;
     if (tab_id === "") tab_id = null;
@@ -1004,6 +1013,7 @@ document.getElementById('add-product-form').addEventListener('submit', async (e)
             stock,
             tab_id,
             is_in_house,
+            upc,
             tenant_id: authState.owner.tenant_id,
             image_data: image_data
         }]);
@@ -1023,11 +1033,12 @@ document.getElementById('edit-product-form').addEventListener('submit', async (e
     const price = document.getElementById('edit-p-price').value;
     const is_in_house = document.getElementById('edit-p-house').checked;
     const stock = is_in_house ? 0 : (document.getElementById('edit-p-stock').value || 0);
+    const upc = document.getElementById('edit-p-upc').value.trim() || null;
 
     let tab_id = document.getElementById('edit-p-tab').value;
     if (tab_id === "") tab_id = null;
 
-    const updates = { name, price, stock, tab_id, is_in_house };
+    const updates = { name, price, stock, tab_id, is_in_house, upc };
 
     // Only update image if changed
     const image_data = await getCompressedImage();
@@ -1089,7 +1100,7 @@ function renderBilling() {
     if (searchInput) {
         const term = searchInput.value.toLowerCase();
         if (term) {
-            filtered = filtered.filter(p => p.name.toLowerCase().startsWith(term));
+            filtered = filtered.filter(p => p.name.toLowerCase().startsWith(term) || (p.upc && p.upc.toLowerCase().includes(term)));
         }
     }
 
@@ -1290,6 +1301,15 @@ async function generateBill() {
 
     const paymentMode = document.querySelector('input[name="paymode"]:checked').value;
     const customerName = document.getElementById('customer-name').value.trim();
+    
+    // Auto-expand customer details if empty and collapsed
+    const customerDetailsAccordion = document.getElementById('customer-details-accordion');
+    if (customerDetailsAccordion && !customerDetailsAccordion.open && !customerName) {
+        customerDetailsAccordion.open = true;
+        customerDetailsAccordion.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        return; // Pause to let user enter details if they want to
+    }
+
     const customerPhone = document.getElementById('customer-phone').value.trim();
     const customerGstin = (document.getElementById('customer-gstin')?.value || '').trim().toUpperCase();
     const customerAddress = (document.getElementById('customer-address')?.value || '').trim();
@@ -1369,6 +1389,10 @@ async function generateBill() {
     }
 
     const billId = billData.id;
+
+    if (typeof checkAndAutoAddCustomer === 'function') {
+        checkAndAutoAddCustomer(customerName, customerPhone, customerGstin, customerAddress);
+    }
 
     const itemsToInsert = appState.cart.map(item => ({
         bill_id: billId,
@@ -2143,6 +2167,22 @@ function applyCustomDate(source) {
     loadDashboard('custom');
 }
 
+function updateDashboardPayables() {
+    const toPaySuppliers = (appState.suppliers || [])
+        .filter(s => s.amount_type === 'creditor')
+        .reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
+    
+    const toReceiveCustomers = (appState.customers || [])
+        .filter(c => c.amount_type === 'debtor')
+        .reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+
+    const elToPay = document.getElementById('stat-to-pay-suppliers');
+    if (elToPay) elToPay.textContent = `₹${toPaySuppliers.toFixed(2)}`;
+    
+    const elToRecv = document.getElementById('stat-to-receive-customers');
+    if (elToRecv) elToRecv.textContent = `₹${toReceiveCustomers.toFixed(2)}`;
+}
+
 async function loadDashboard(range) {
     if (!supabase) return;
 
@@ -2208,6 +2248,9 @@ async function loadDashboard(range) {
         document.getElementById('stat-upi').textContent = `₹${upi.toFixed(2)}`;
         document.getElementById('stat-other').textContent = `₹${other.toFixed(2)}`;
         document.getElementById('stat-bill-count').textContent = count;
+        
+        // Update payables/receivables
+        if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
 
         // --- Render Charts ---
         // Top Products Logic
@@ -4622,6 +4665,12 @@ async function openEditBillModal(billId) {
 
         document.getElementById('edit-bill-id').value = bill.id;
         document.getElementById('edit-bill-number-title').textContent = '#' + (bill.bill_number || bill.id.slice(0, 8));
+        
+        const dateObj = bill.created_at ? new Date(bill.created_at) : new Date();
+        const tzoffset = dateObj.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(dateObj - tzoffset)).toISOString().slice(0, 16);
+        document.getElementById('edit-bill-date').value = localISOTime;
+        
         document.getElementById('edit-bill-customer-name').value = bill.customer_name || '';
         document.getElementById('edit-bill-customer-phone').value = bill.customer_phone || '';
         document.getElementById('edit-bill-customer-gstin').value = bill.customer_gstin || '';
@@ -4813,6 +4862,12 @@ document.getElementById('edit-bill-form')?.addEventListener('submit', async (e) 
     const customerGstin = (document.getElementById('edit-bill-customer-gstin')?.value || '').trim().toUpperCase();
     const customerAddress = (document.getElementById('edit-bill-customer-address')?.value || '').trim();
 
+    let editedDate = new Date();
+    const dateInput = document.getElementById('edit-bill-date')?.value;
+    if (dateInput) {
+        editedDate = new Date(dateInput);
+    }
+
     const paymentMode = document.querySelector('input[name="edit-paymode"]:checked')?.value || 'CASH';
     const discountType = document.getElementById('edit-bill-discount-type').value;
     const discountValue = parseFloat(document.getElementById('edit-bill-discount-value').value) || 0;
@@ -4828,6 +4883,7 @@ document.getElementById('edit-bill-form')?.addEventListener('submit', async (e) 
     if (final < 0) final = 0;
 
     const billPayload = {
+        created_at: editedDate.toISOString(),
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_gstin: customerGstin,
@@ -4895,3 +4951,1009 @@ document.getElementById('edit-bill-form')?.addEventListener('submit', async (e) 
     reprintBill(billId);
 });
 
+// ==========================================
+// CUSTOMERS MANAGEMENT
+// ==========================================
+
+async function loadCustomers() {
+    if (!supabase) return;
+    const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('tenant_id', authState.owner.tenant_id)
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error loading customers:', error);
+    } else {
+        appState.customers = data || [];
+        renderCustomers();
+        if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+    }
+}
+
+function renderCustomers() {
+    const tbody = document.getElementById('customers-table-body');
+    if (!tbody) return;
+    const query = (document.getElementById('customers-search')?.value || '').toLowerCase();
+    
+    let filtered = appState.customers;
+    if (query) {
+        filtered = filtered.filter(c => 
+            c.name.toLowerCase().includes(query) || 
+            (c.phone && c.phone.includes(query))
+        );
+    }
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px;">No customers found.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(c => {
+        let balanceText = '-';
+        if (c.amount) {
+            const type = c.amount_type === 'creditor' ? ' (Cr)' : (c.amount_type === 'debtor' ? ' (Dr)' : '');
+            const color = c.amount_type === 'creditor' ? 'var(--danger-color)' : (c.amount_type === 'debtor' ? 'var(--success-color)' : 'inherit');
+            balanceText = `<span style="color: ${color}; font-weight: 500;">₹${parseFloat(c.amount).toFixed(2)}${type}</span>`;
+        }
+
+        html += `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td>${c.name}</td>
+                <td>${c.phone || '-'}</td>
+                <td>${c.gstin || '-'}</td>
+                <td>${c.address || '-'}</td>
+                <td>${balanceText}</td>
+                <td>
+                    <button class="action-btn small" onclick="openHistoryModal('customer', '${c.id}')">History</button>
+                    <button class="action-btn small" onclick="openEditCustomerModal('${c.id}')" style="margin-left: 0.5rem;">Edit</button>
+                    <button class="action-btn small danger" onclick="deleteCustomer('${c.id}')" style="margin-left: 0.5rem;">Delete</button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+}
+
+function openAddCustomerModal() {
+    document.getElementById('customer-id').value = '';
+    document.getElementById('customer-form').reset();
+    document.getElementById('modal-customer-title').textContent = 'Add Customer';
+    document.getElementById('modal-customer').classList.remove('hidden');
+    document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+function openEditCustomerModal(id) {
+    const c = appState.customers.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('customer-id').value = c.id;
+    document.getElementById('customer-form-name').value = c.name;
+    document.getElementById('customer-form-phone').value = c.phone || '';
+    document.getElementById('customer-form-gstin').value = c.gstin || '';
+    document.getElementById('customer-form-address').value = c.address || '';
+    document.getElementById('customer-form-amount').value = c.amount || '';
+    document.getElementById('customer-form-amount-type').value = c.amount_type || '';
+    document.getElementById('customer-form-notes').value = c.notes || '';
+    document.getElementById('modal-customer-title').textContent = 'Edit Customer';
+    document.getElementById('modal-customer').classList.remove('hidden');
+    document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+document.getElementById('customer-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('customer-id').value;
+    const name = document.getElementById('customer-form-name').value.trim();
+    const phone = document.getElementById('customer-form-phone').value.trim();
+    const gstin = document.getElementById('customer-form-gstin').value.trim().toUpperCase();
+    const address = document.getElementById('customer-form-address').value.trim();
+    const amount = document.getElementById('customer-form-amount').value;
+    const amount_type = document.getElementById('customer-form-amount-type').value;
+    const notes = document.getElementById('customer-form-notes').value.trim();
+    
+    const payload = {
+        tenant_id: authState.owner.tenant_id,
+        name, phone, gstin, address,
+        amount: amount ? parseFloat(amount) : 0,
+        amount_type: amount_type || null,
+        notes: notes || null
+    };
+    
+    if (id) {
+        const { error } = await supabase.from('customers').update(payload).eq('id', id);
+        if (error) { alert('Error updating customer: ' + error.message); return; }
+        showToast('Customer updated');
+    } else {
+        const { error } = await supabase.from('customers').insert([payload]);
+        if (error) { alert('Error adding customer: ' + error.message); return; }
+        showToast('Customer added');
+    }
+    
+    closeModals();
+    loadCustomers();
+});
+
+async function deleteCustomer(id) {
+    if(!confirm('Are you sure you want to delete this customer?')) return;
+    const { error } = await supabase.from('customers').delete().eq('id', id);
+    if (error) alert('Error: ' + error.message);
+    else { showToast('Customer deleted'); loadCustomers(); }
+}
+
+let customerSuggestionTimeout;
+function showCustomerSuggestions() {
+    clearTimeout(customerSuggestionTimeout);
+    const input = document.getElementById('customer-name');
+    const box = document.getElementById('customer-suggestions');
+    if (!input || !box) return;
+    
+    const query = input.value.trim().toLowerCase();
+    if (!query) {
+        box.classList.add('hidden');
+        return;
+    }
+    
+    const matches = (appState.customers || []).filter(c => 
+        c.name.toLowerCase().includes(query) || (c.phone && c.phone.includes(query))
+    ).slice(0, 5);
+    
+    if (matches.length === 0) {
+        box.classList.add('hidden');
+        return;
+    }
+    
+    let html = '';
+    matches.forEach(c => {
+        const cStr = encodeURIComponent(JSON.stringify(c));
+        html += `<div class="suggestion-item" onmousedown="selectCustomerSuggestion('${cStr}')">
+            <strong>${c.name}</strong>
+            ${c.phone ? `<span>📞 ${c.phone}</span>` : ''}
+        </div>`;
+    });
+    box.innerHTML = html;
+    box.classList.remove('hidden');
+}
+
+function hideCustomerSuggestionsDelay() {
+    customerSuggestionTimeout = setTimeout(() => {
+        const box = document.getElementById('customer-suggestions');
+        if (box) box.classList.add('hidden');
+    }, 200);
+}
+
+function selectCustomerSuggestion(cStr) {
+    try {
+        const c = JSON.parse(decodeURIComponent(cStr));
+        document.getElementById('customer-name').value = c.name;
+        document.getElementById('customer-phone').value = c.phone || '';
+        document.getElementById('customer-gstin').value = c.gstin || '';
+        document.getElementById('customer-address').value = c.address || '';
+        document.getElementById('customer-suggestions').classList.add('hidden');
+    } catch(e) {}
+}
+
+async function checkAndAutoAddCustomer(name, phone, gstin, address) {
+    if (!name) return;
+    // Check if exists
+    const exists = appState.customers.find(c => 
+        (phone && c.phone === phone) || 
+        (!phone && c.name.toLowerCase() === name.toLowerCase())
+    );
+    if (!exists) {
+        const payload = {
+            tenant_id: authState.owner.tenant_id,
+            name, phone, gstin, address
+        };
+        const { error } = await supabase.from('customers').insert([payload]);
+        if (!error) loadCustomers();
+    }
+}
+
+async function migrateExistingCustomers() {
+    if(!confirm('This will scan all existing bills and add unique customers to the Customers tab. Proceed?')) return;
+    
+    showToast('Migration started... Please wait.');
+    const { data: bills, error } = await supabase
+        .from('bills')
+        .select('customer_name, customer_phone, customer_gstin, customer_address')
+        .eq('tenant_id', authState.owner.tenant_id);
+        
+    if (error) {
+        alert('Error fetching bills: ' + error.message);
+        return;
+    }
+    
+    const uniqueCustomers = [];
+    const seenMap = new Set();
+    
+    bills.forEach(b => {
+        if (!b.customer_name) return;
+        const key = (b.customer_phone || '') + '_' + b.customer_name.toLowerCase();
+        if (!seenMap.has(key)) {
+            seenMap.add(key);
+            uniqueCustomers.push({
+                tenant_id: authState.owner.tenant_id,
+                name: b.customer_name,
+                phone: b.customer_phone || '',
+                gstin: b.customer_gstin || '',
+                address: b.customer_address || ''
+            });
+        }
+    });
+    
+    // Filter against already existing customers in DB
+    const existing = appState.customers || [];
+    const toInsert = uniqueCustomers.filter(uc => {
+        return !existing.some(c => 
+            (uc.phone && c.phone === uc.phone) || 
+            (!uc.phone && c.name.toLowerCase() === uc.name.toLowerCase())
+        );
+    });
+    
+    if (toInsert.length === 0) {
+        alert('No new customers to migrate.');
+        return;
+    }
+    
+    const { error: insertError } = await supabase.from('customers').insert(toInsert);
+    if (insertError) {
+        alert('Error inserting customers: ' + insertError.message);
+        return;
+    }
+    
+    showToast(`Successfully migrated ${toInsert.length} customers.`);
+    loadCustomers();
+}
+
+// ==========================================
+// PURCHASES / SUPPLIERS MANAGEMENT
+// ==========================================
+
+appState.suppliers = [];
+appState.purchasesCart = [];
+
+async function loadSuppliers() {
+    if (!supabase) return;
+    try {
+        const { data, error } = await supabase
+            .from('suppliers')
+            .select('*')
+            .eq('tenant_id', authState.owner.tenant_id)
+            .order('name');
+        
+        if (error) throw error;
+        appState.suppliers = data || [];
+        if (typeof renderSuppliers === 'function') {
+            renderSuppliers();
+        }
+        if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+    } catch (err) {
+        console.error('Error loading suppliers:', err);
+    }
+}
+
+async function renderPurchaseHistory() {
+    const tbody = document.getElementById('purchase-history-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>';
+
+    try {
+        let query = supabase.from('purchase_slips').select(`
+            *,
+            purchase_slip_items (id)
+        `).eq('tenant_id', authState.owner.tenant_id);
+
+        const dateFrom = document.getElementById('purchase-history-date-from')?.value;
+        const dateTo = document.getElementById('purchase-history-date-to')?.value;
+        const supplierSearch = document.getElementById('purchase-history-supplier')?.value.toLowerCase();
+        const invoiceSearch = document.getElementById('purchase-history-invoice')?.value.toLowerCase();
+
+        if (dateFrom) query = query.gte('entry_date', dateFrom);
+        if (dateTo) query = query.lte('entry_date', dateTo);
+        if (invoiceSearch) query = query.ilike('invoice_number', `%${invoiceSearch}%`);
+        if (supplierSearch) query = query.ilike('supplier_name', `%${supplierSearch}%`);
+
+        const { data, error } = await query.order('entry_date', { ascending: false });
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No purchases found.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        data.forEach(slip => {
+            const entryDate = new Date(slip.entry_date).toLocaleDateString();
+            const invDate = slip.invoice_date ? new Date(slip.invoice_date).toLocaleDateString() : '-';
+            const itemCount = slip.purchase_slip_items ? slip.purchase_slip_items.length : 0;
+            
+            html += `
+                <tr style="border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="printPurchaseSlip('${slip.id}')" title="Click to Print">
+                    <td>${slip.invoice_number || '-'}</td>
+                    <td>${entryDate}</td>
+                    <td>${invDate}</td>
+                    <td>${slip.supplier_name || '-'}</td>
+                    <td>${itemCount}</td>
+                    <td style="font-weight:bold;">₹${parseFloat(slip.total_amount).toFixed(2)}</td>
+                    <td>
+                        <button class="action-btn small" onclick="event.stopPropagation(); printPurchaseSlip('${slip.id}')">Print</button>
+                        <button class="action-btn small danger" onclick="event.stopPropagation(); deletePurchaseSlip('${slip.id}')" style="margin-left: 0.5rem;">Delete</button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+
+    } catch (err) {
+        console.error("Error loading purchase history:", err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">Error loading history</td></tr>`;
+    }
+}
+
+async function deletePurchaseSlip(slipId) {
+    if (!confirm('Are you sure you want to delete this purchase receipt? This action cannot be undone.')) return;
+    try {
+        const { error } = await supabase.from('purchase_slips').delete().eq('id', slipId);
+        if (error) throw error;
+        showToast('Purchase receipt deleted successfully');
+        renderPurchaseHistory();
+    } catch (err) {
+        console.error('Error deleting purchase slip:', err);
+        alert('Failed to delete purchase receipt: ' + err.message);
+    }
+}
+
+function initPurchases() {
+    // Set default entry date
+    const today = new Date().toISOString().split('T')[0];
+    const entryDateInput = document.getElementById('purchase-entry-date');
+    if (entryDateInput) entryDateInput.value = today;
+
+    // Setup autocomplete for supplier name
+    const supplierNameInput = document.getElementById('purchase-supplier-name');
+    const suggestionsBox = document.getElementById('supplier-suggestions');
+
+    if (supplierNameInput && suggestionsBox) {
+        supplierNameInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            suggestionsBox.innerHTML = '';
+            
+            if (!query) {
+                suggestionsBox.classList.add('hidden');
+                return;
+            }
+
+            const matches = appState.suppliers.filter(s => 
+                s.name.toLowerCase().includes(query) || 
+                (s.phone && s.phone.includes(query))
+            );
+
+            if (matches.length > 0) {
+                matches.forEach(s => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerHTML = `<strong>${s.name}</strong><br><small>${s.phone || 'No phone'}</small>`;
+                    div.onclick = () => {
+                        supplierNameInput.value = s.name;
+                        document.getElementById('purchase-supplier-phone').value = s.phone || '';
+                        document.getElementById('purchase-supplier-gstin').value = s.gstin || '';
+                        document.getElementById('purchase-supplier-address').value = s.address || '';
+                        suggestionsBox.classList.add('hidden');
+                    };
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.classList.remove('hidden');
+            } else {
+                suggestionsBox.classList.add('hidden');
+            }
+        });
+
+        // Hide when clicking outside
+        document.addEventListener('click', (e) => {
+            if (supplierNameInput && suggestionsBox) {
+                if (!supplierNameInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                    suggestionsBox.classList.add('hidden');
+                }
+            }
+        });
+    }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(initPurchases, 1000);
+});
+
+function updatePurchaseItemCalc() {
+    const boughtQty = parseInt(document.getElementById('purchase-item-bought-qty').value) || 0;
+    const freeQty = parseInt(document.getElementById('purchase-item-free-qty').value) || 0;
+    const boughtPrice = parseFloat(document.getElementById('purchase-item-bought-price').value) || 0;
+    const discount = parseFloat(document.getElementById('purchase-item-discount').value) || 0;
+
+    const totalQty = boughtQty + freeQty;
+    document.getElementById('purchase-item-total-qty').value = totalQty;
+
+    let amount = (boughtQty * boughtPrice) - discount;
+    if (amount < 0) amount = 0;
+    document.getElementById('purchase-item-amount').value = amount.toFixed(2);
+}
+
+function addPurchaseItem() {
+    const upc = (document.getElementById('purchase-item-upc').value || '').trim();
+    const name = (document.getElementById('purchase-item-name').value || '').trim();
+    const boughtQty = parseInt(document.getElementById('purchase-item-bought-qty').value) || 0;
+    const freeQty = parseInt(document.getElementById('purchase-item-free-qty').value) || 0;
+    const expiryDate = document.getElementById('purchase-item-expiry').value || null;
+    const boughtPrice = parseFloat(document.getElementById('purchase-item-bought-price').value) || 0;
+    const sellingPrice = parseFloat(document.getElementById('purchase-item-selling-price').value) || 0;
+    const discount = parseFloat(document.getElementById('purchase-item-discount').value) || 0;
+    
+    if (!name) {
+        alert("Product Name is required.");
+        return;
+    }
+    if (boughtQty <= 0 && freeQty <= 0) {
+        alert("Total Quantity must be greater than 0.");
+        return;
+    }
+
+    const totalQty = boughtQty + freeQty;
+    let amount = (boughtQty * boughtPrice) - discount;
+    if (amount < 0) amount = 0;
+
+    const item = {
+        id: 'item_' + Date.now(),
+        upc,
+        product_name: name,
+        bought_qty: boughtQty,
+        free_qty: freeQty,
+        total_qty: totalQty,
+        expiry_date: expiryDate,
+        bought_price: boughtPrice,
+        selling_price: sellingPrice,
+        discount,
+        amount
+    };
+
+    appState.purchasesCart.push(item);
+    renderPurchaseCart();
+
+    // Reset item form
+    document.getElementById('purchase-item-upc').value = '';
+    document.getElementById('purchase-item-name').value = '';
+    document.getElementById('purchase-item-bought-qty').value = '1';
+    document.getElementById('purchase-item-free-qty').value = '0';
+    document.getElementById('purchase-item-expiry').value = '';
+    document.getElementById('purchase-item-bought-price').value = '0';
+    document.getElementById('purchase-item-selling-price').value = '0';
+    document.getElementById('purchase-item-discount').value = '0';
+    updatePurchaseItemCalc();
+    
+    document.getElementById('purchase-item-upc').focus();
+}
+
+function renderPurchaseCart() {
+    const container = document.getElementById('purchase-cart-items');
+    if (!container) return;
+    
+    container.innerHTML = '';
+
+    let totalAmount = 0;
+    let totalItems = 0;
+
+    appState.purchasesCart.forEach(item => {
+        totalAmount += item.amount;
+        totalItems += item.total_qty;
+
+        const div = document.createElement('div');
+        div.className = 'bill-item-row';
+        div.innerHTML = `
+            <div style="flex: 1;">
+                <div style="font-weight: 600;">${item.product_name}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                    UPC: ${item.upc || 'N/A'} | Qty: ${item.bought_qty} + ${item.free_qty} Free = ${item.total_qty}
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-weight: bold;">₹${item.amount.toFixed(2)}</div>
+                <button onclick="removePurchaseItem('${item.id}')" style="background:none; border:none; color:var(--danger-color); font-size:0.8rem; cursor:pointer; margin-top:4px;">Remove</button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+
+    document.getElementById('purchase-cart-total-items').textContent = totalItems;
+    document.getElementById('purchase-cart-total-amount').textContent = totalAmount.toFixed(2);
+}
+
+function removePurchaseItem(id) {
+    appState.purchasesCart = appState.purchasesCart.filter(i => i.id !== id);
+    renderPurchaseCart();
+}
+
+async function checkAndAutoAddSupplier(name, phone, gstin, address) {
+    if (!name) return;
+    const existing = appState.suppliers.find(s => 
+        (phone && s.phone === phone) || 
+        (!phone && s.name.toLowerCase() === name.toLowerCase())
+    );
+
+    if (!existing) {
+        try {
+            const { error } = await supabase
+                .from('suppliers')
+                .insert([{
+                    name, phone, gstin, address,
+                    tenant_id: authState.owner.tenant_id
+                }]);
+            if (!error) loadSuppliers();
+        } catch (e) {
+            console.error('Error auto-adding supplier', e);
+        }
+    }
+}
+
+async function savePurchaseSlip() {
+    if (appState.purchasesCart.length === 0) {
+        alert("Cannot save an empty slip.");
+        return;
+    }
+
+    const supplierName = document.getElementById('purchase-supplier-name').value.trim();
+    if (!supplierName) {
+        alert("Supplier Name is required.");
+        return;
+    }
+
+    const supplierPhone = document.getElementById('purchase-supplier-phone').value.trim();
+    const supplierGstin = document.getElementById('purchase-supplier-gstin').value.trim().toUpperCase();
+    const supplierAddress = document.getElementById('purchase-supplier-address').value.trim();
+    const invoiceDate = document.getElementById('purchase-invoice-date').value || null;
+    const invoiceNumber = document.getElementById('purchase-invoice-number').value.trim();
+    const entryDate = document.getElementById('purchase-entry-date').value;
+
+    if (!entryDate) {
+        alert("Entry Date is required.");
+        return;
+    }
+
+    let totalAmount = appState.purchasesCart.reduce((sum, item) => sum + item.amount, 0);
+
+    const btn = document.querySelector('#purchases .action-btn.primary.full-width');
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    try {
+        // Auto add supplier
+        await checkAndAutoAddSupplier(supplierName, supplierPhone, supplierGstin, supplierAddress);
+
+        // Save Purchase Slip
+        const { data: slip, error: slipError } = await supabase
+            .from('purchase_slips')
+            .insert([{
+                tenant_id: authState.owner.tenant_id,
+                supplier_name: supplierName,
+                supplier_phone: supplierPhone,
+                supplier_gstin: supplierGstin,
+                supplier_address: supplierAddress,
+                invoice_date: invoiceDate,
+                invoice_number: invoiceNumber,
+                entry_date: entryDate,
+                total_amount: totalAmount,
+                created_by: authState.owner.id
+            }])
+            .select()
+            .single();
+
+        if (slipError) throw slipError;
+
+        // Save Items
+        const itemsToInsert = appState.purchasesCart.map(i => ({
+            purchase_slip_id: slip.id,
+            tenant_id: authState.owner.tenant_id,
+            upc: i.upc || null,
+            product_name: i.product_name,
+            bought_qty: i.bought_qty,
+            free_qty: i.free_qty,
+            total_qty: i.total_qty,
+            expiry_date: i.expiry_date,
+            bought_price: i.bought_price,
+            selling_price: i.selling_price,
+            discount: i.discount,
+            amount: i.amount
+        }));
+
+        const { error: itemsError } = await supabase
+            .from('purchase_slip_items')
+            .insert(itemsToInsert);
+
+        if (itemsError) throw itemsError;
+
+        // Process Inventory Updates
+        for (const item of itemsToInsert) {
+            let matchedProduct = null;
+            
+            // 1. Try finding by UPC
+            if (item.upc) {
+                matchedProduct = appState.products.find(p => p.upc === item.upc);
+            }
+            
+            // 2. Try finding by Name (Exact match case-insensitive)
+            if (!matchedProduct) {
+                matchedProduct = appState.products.find(p => p.name.toLowerCase() === item.product_name.toLowerCase());
+            }
+
+            if (matchedProduct) {
+                // Update existing product stock
+                const newStock = (matchedProduct.stock || 0) + item.total_qty;
+                await supabase
+                    .from('products')
+                    .update({ stock: newStock })
+                    .eq('id', matchedProduct.id);
+            } else {
+                // Create new product
+                await supabase
+                    .from('products')
+                    .insert([{
+                        tenant_id: authState.owner.tenant_id,
+                        name: item.product_name,
+                        upc: item.upc,
+                        price: item.selling_price,
+                        stock: item.total_qty,
+                        is_in_house: false
+                    }]);
+            }
+        }
+
+        // Clean up
+        appState.purchasesCart = [];
+        renderPurchaseCart();
+        
+        document.getElementById('purchase-supplier-name').value = '';
+        document.getElementById('purchase-supplier-phone').value = '';
+        document.getElementById('purchase-supplier-gstin').value = '';
+        document.getElementById('purchase-supplier-address').value = '';
+        document.getElementById('purchase-invoice-date').value = '';
+        document.getElementById('purchase-invoice-number').value = '';
+
+        await loadInventory();
+        showToast("Purchase Slip saved successfully!");
+
+    } catch (err) {
+        console.error("Error saving purchase slip:", err);
+        alert("Failed to save purchase slip. " + err.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+// ==========================================
+// SUPPLIERS VIEW LOGIC
+// ==========================================
+
+function renderSuppliers() {
+    try {
+        const tbody = document.getElementById('suppliers-table-body');
+        const searchInput = document.getElementById('suppliers-search');
+        if (!tbody) return;
+
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+        let filtered = appState.suppliers || [];
+        if (searchTerm) {
+            filtered = filtered.filter(s => 
+                (s.name && String(s.name).toLowerCase().includes(searchTerm)) ||
+                (s.phone && String(s.phone).includes(searchTerm))
+            );
+        }
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px;">No suppliers found.</td></tr>`;
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(s => {
+            let balanceText = '-';
+            if (s.amount) {
+                const type = s.amount_type === 'creditor' ? ' (Cr)' : (s.amount_type === 'debtor' ? ' (Dr)' : '');
+                const color = s.amount_type === 'creditor' ? 'var(--danger-color)' : (s.amount_type === 'debtor' ? 'var(--success-color)' : 'inherit');
+                balanceText = `<span style="color: ${color}; font-weight: 500;">₹${parseFloat(s.amount).toFixed(2)}${type}</span>`;
+            }
+
+            html += `
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="font-weight: 500;">${s.name || ''}</td>
+                    <td>${s.phone || '-'}</td>
+                    <td style="text-transform: uppercase;">${s.gstin || '-'}</td>
+                    <td>${s.address || '-'}</td>
+                    <td>${balanceText}</td>
+                    <td>
+                        <button class="action-btn small" onclick="openHistoryModal('supplier', '${s.id}')">History</button>
+                        <button class="action-btn small" onclick="openEditSupplierModal('${s.id}')" style="margin-left: 0.5rem;">Edit</button>
+                        <button class="action-btn small danger" onclick="deleteSupplier('${s.id}')" style="margin-left: 0.5rem;">Delete</button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    } catch (err) {
+        console.error("Error rendering suppliers:", err);
+        const tbody = document.getElementById('suppliers-table-body');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:red;">Error loading suppliers.</td></tr>`;
+    }
+}
+
+function openAddSupplierModal() {
+    document.getElementById('modal-supplier-title').textContent = 'Add Supplier';
+    document.getElementById('supplier-id').value = '';
+    document.getElementById('supplier-form-name').value = '';
+    document.getElementById('supplier-form-phone').value = '';
+    document.getElementById('supplier-form-gstin').value = '';
+    document.getElementById('supplier-form-address').value = '';
+    
+    document.getElementById('modal-overlay').classList.remove('hidden');
+    document.getElementById('modal-supplier').classList.remove('hidden');
+}
+
+function openEditSupplierModal(id) {
+    const supplier = appState.suppliers.find(s => s.id === id);
+    if (!supplier) return;
+
+    document.getElementById('modal-supplier-title').textContent = 'Edit Supplier';
+    document.getElementById('supplier-id').value = supplier.id;
+    document.getElementById('supplier-form-name').value = supplier.name;
+    document.getElementById('supplier-form-phone').value = supplier.phone || '';
+    document.getElementById('supplier-form-gstin').value = supplier.gstin || '';
+    document.getElementById('supplier-form-address').value = supplier.address || '';
+    document.getElementById('supplier-form-amount').value = supplier.amount || '';
+    document.getElementById('supplier-form-amount-type').value = supplier.amount_type || '';
+    document.getElementById('supplier-form-notes').value = supplier.notes || '';
+
+    document.getElementById('modal-overlay').classList.remove('hidden');
+    document.getElementById('modal-supplier').classList.remove('hidden');
+}
+
+async function deleteSupplier(id) {
+    if (!confirm('Are you sure you want to delete this supplier? This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const { error } = await supabase
+            .from('suppliers')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        
+        showToast('Supplier deleted successfully');
+        await loadSuppliers();
+        renderSuppliers();
+    } catch (err) {
+        console.error("Error deleting supplier:", err);
+        alert("Failed to delete supplier: " + err.message);
+    }
+}
+
+document.getElementById('supplier-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('supplier-id').value;
+    const name = document.getElementById('supplier-form-name').value.trim();
+    const phone = document.getElementById('supplier-form-phone').value.trim();
+    const gstin = document.getElementById('supplier-form-gstin').value.trim().toUpperCase();
+    const address = document.getElementById('supplier-form-address').value.trim();
+    const amount = document.getElementById('supplier-form-amount').value;
+    const amount_type = document.getElementById('supplier-form-amount-type').value;
+    const notes = document.getElementById('supplier-form-notes').value.trim();
+
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    try {
+        const payload = {
+            name,
+            phone,
+            gstin,
+            address,
+            tenant_id: authState.owner.tenant_id,
+            amount: amount ? parseFloat(amount) : 0,
+            amount_type: amount_type || null,
+            notes: notes || null
+        };
+
+        if (id) {
+            // Update
+            const { error } = await supabase
+                .from('suppliers')
+                .update(payload)
+                .eq('id', id);
+            if (error) throw error;
+            showToast('Supplier updated successfully');
+        } else {
+            // Insert
+            const { error } = await supabase
+                .from('suppliers')
+                .insert([payload]);
+            if (error) throw error;
+            showToast('Supplier added successfully');
+        }
+
+        closeModals();
+        await loadSuppliers();
+        renderSuppliers();
+    } catch (err) {
+        console.error("Error saving supplier:", err);
+        alert("Failed to save supplier: " + err.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+});
+
+// ==========================================
+// HISTORY MODAL (CUSTOMERS & SUPPLIERS)
+// ==========================================
+async function openHistoryModal(type, id) {
+    const tbody = document.getElementById('modal-history-tbody');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+    
+    document.getElementById('modal-overlay').classList.remove('hidden');
+    document.getElementById('modal-history').classList.remove('hidden');
+
+    try {
+        let html = '';
+        if (type === 'customer') {
+            const customer = appState.customers.find(c => c.id === id);
+            document.getElementById('modal-history-title').textContent = `History: ${customer?.name || 'Customer'}`;
+            
+            // Query bills by customer phone OR name
+            let query = supabase.from('bills').select('*').eq('tenant_id', authState.owner.tenant_id);
+            if (customer?.phone) {
+                query = query.eq('customer_phone', customer.phone);
+            } else if (customer?.name) {
+                query = query.eq('customer_name', customer.name);
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No history found.</td></tr>';
+                return;
+            }
+            
+            const { data, error } = await query.order('created_at', { ascending: false });
+            if (error) throw error;
+            
+            if (!data || data.length === 0) {
+                html = '<tr><td colspan="4" style="text-align:center;">No bills found.</td></tr>';
+            } else {
+                data.forEach(bill => {
+                    const date = new Date(bill.created_at).toLocaleDateString();
+                    html += `
+                        <tr style="border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="reprintBill('${bill.id}')" title="Click to Print">
+                            <td>${date}</td>
+                            <td>${bill.bill_number || '-'}</td>
+                            <td style="font-weight:bold;">₹${parseFloat(bill.final_amount).toFixed(2)}</td>
+                            <td><button class="action-btn small" onclick="event.stopPropagation(); reprintBill('${bill.id}')">Print</button></td>
+                        </tr>
+                    `;
+                });
+            }
+        } else if (type === 'supplier') {
+            const supplier = appState.suppliers.find(s => s.id === id);
+            document.getElementById('modal-history-title').textContent = `History: ${supplier?.name || 'Supplier'}`;
+            
+            // Query purchase_slips
+            let query = supabase.from('purchase_slips').select('*').eq('tenant_id', authState.owner.tenant_id);
+            if (supplier?.phone) {
+                query = query.eq('supplier_phone', supplier.phone);
+            } else if (supplier?.name) {
+                query = query.eq('supplier_name', supplier.name);
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No history found.</td></tr>';
+                return;
+            }
+
+            const { data, error } = await query.order('entry_date', { ascending: false });
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                html = '<tr><td colspan="4" style="text-align:center;">No purchases found.</td></tr>';
+            } else {
+                data.forEach(slip => {
+                    const date = new Date(slip.entry_date).toLocaleDateString();
+                    html += `
+                        <tr style="border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="printPurchaseSlip('${slip.id}')" title="Click to Print">
+                            <td>${date}</td>
+                            <td>${slip.invoice_number || '-'}</td>
+                            <td style="font-weight:bold;">₹${parseFloat(slip.total_amount).toFixed(2)}</td>
+                            <td><button class="action-btn small" onclick="event.stopPropagation(); printPurchaseSlip('${slip.id}')">Print</button></td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+        tbody.innerHTML = html;
+    } catch (err) {
+        console.error("Error loading history:", err);
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+async function printPurchaseSlip(slipId) {
+    try {
+        const { data: slip, error: err1 } = await supabase.from('purchase_slips').select('*').eq('id', slipId).single();
+        if (err1) throw err1;
+        const { data: items, error: err2 } = await supabase.from('purchase_slip_items').select('*').eq('purchase_slip_id', slipId);
+        if (err2) throw err2;
+
+        const storeName = appState.ownerPreferredName || 'My Store';
+        const storeAddress = appState.ownerPreferredAddress || '';
+        
+        let printWindow = window.open('', '', 'width=800,height=600');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Purchase Slip ${slip.invoice_number || ''}</title>
+                <style>
+                    body { font-family: 'Courier New', Courier, monospace; padding: 20px; }
+                    .header { text-align: center; margin-bottom: 20px; }
+                    .details { margin-bottom: 20px; font-size: 14px; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 14px; }
+                    th { background-color: #f3f4f6; }
+                    .total { text-align: right; font-size: 18px; font-weight: bold; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>${storeName}</h2>
+                    <p>${storeAddress}</p>
+                    <h3>PURCHASE RECEIPT</h3>
+                </div>
+                <div class="details">
+                    <p><strong>Invoice No:</strong> ${slip.invoice_number || '-'}</p>
+                    <p><strong>Invoice Date:</strong> ${slip.invoice_date || '-'}</p>
+                    <p><strong>Supplier:</strong> ${slip.supplier_name || '-'} (${slip.supplier_phone || '-'})</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Free Qty</th>
+                            <th>Price</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.map(i => `
+                            <tr>
+                                <td>${i.product_name}</td>
+                                <td>${i.bought_qty}</td>
+                                <td>${i.free_qty}</td>
+                                <td>₹${parseFloat(i.bought_price).toFixed(2)}</td>
+                                <td>₹${parseFloat(i.amount).toFixed(2)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div class="total">
+                    Total Amount: ₹${parseFloat(slip.total_amount).toFixed(2)}
+                </div>
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    } catch (err) {
+        console.error("Error printing purchase slip:", err);
+        alert("Failed to print: " + err.message);
+    }
+}
