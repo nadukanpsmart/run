@@ -525,7 +525,9 @@
                             <input type="text" id="customer-phone" placeholder="Customer Phone"
                                 style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
                             <input type="text" id="customer-gstin" placeholder="Customer GSTIN (Optional)"
-                                style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit; text-transform: uppercase;">
+                                style="width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit; text-transform: uppercase;">
+                            <textarea id="customer-address" rows="3" placeholder="Customer Address&#10;Line 1&#10;Line 2&#10;Line 3&#10;Line 4"
+                                style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit; font-size: 0.85rem; resize: vertical;"></textarea>
                         </div>
 
                         <div class="payment-mode">
@@ -797,6 +799,20 @@
                         <div class="form-group" style="margin-bottom: 1.5rem;">
                             <label>Preferred Address</label>
                             <input type="text" id="pref-store-address" placeholder="Store Address"
+                                style="width: 100%; margin-bottom: 0.5rem;">
+                        </div>
+
+                        <!-- Store GSTIN -->
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label>Store GSTIN <span style="font-weight:400; font-size: 0.85em; color: var(--text-secondary);">- printed below store name on bill</span></label>
+                            <input type="text" id="pref-store-gstin" placeholder="e.g. 36ABCDE1234F1Z7"
+                                style="width: 100%; margin-bottom: 0.5rem; text-transform: uppercase;">
+                        </div>
+
+                        <!-- Billed By Name -->
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label>Billed By Name <span style="font-weight:400; font-size: 0.85em; color: var(--text-secondary);">- printed on bill under "Billed By"</span></label>
+                            <input type="text" id="pref-billed-by" placeholder="e.g. PSMART Admin / John Doe"
                                 style="width: 100%; margin-bottom: 0.5rem;">
                         </div>
 
@@ -1089,6 +1105,89 @@
                 <div class="modal-actions">
                     <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
                     <button type="submit" class="save-btn danger">Confirm Undo</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Edit Bill Modal -->
+        <div id="modal-edit-bill" class="modal hidden" style="max-width: 800px; width: 90vw;">
+            <h2>Edit Bill <span id="edit-bill-number-title" style="color:var(--primary-color);"></span></h2>
+            <form id="edit-bill-form">
+                <input type="hidden" id="edit-bill-id">
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Customer Name</label>
+                        <input type="text" id="edit-bill-customer-name" placeholder="Customer Name">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Customer Phone</label>
+                        <input type="text" id="edit-bill-customer-phone" placeholder="Customer Phone">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Customer GSTIN</label>
+                        <input type="text" id="edit-bill-customer-gstin" placeholder="GSTIN (Optional)" style="text-transform: uppercase;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; grid-column: 1 / -1;">
+                        <label>Customer Address</label>
+                        <textarea id="edit-bill-customer-address" rows="3" placeholder="Customer Address&#10;Line 1&#10;Line 2&#10;Line 3&#10;Line 4" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit; font-size: 0.85rem; resize: vertical;"></textarea>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <div>
+                        <label style="font-weight: 600; font-size: 0.9rem; margin-right: 0.5rem;">Payment Mode:</label>
+                        <label style="margin-right: 0.5rem;"><input type="radio" name="edit-paymode" value="CASH"> Cash</label>
+                        <label style="margin-right: 0.5rem;"><input type="radio" name="edit-paymode" value="UPI"> UPI</label>
+                        <label><input type="radio" name="edit-paymode" value="OTHER"> Other</label>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label style="font-weight: 600; font-size: 0.9rem;">Discount:</label>
+                        <select id="edit-bill-discount-type" style="padding: 0.35rem; border-radius: 4px; border: 1px solid var(--border-color);" onchange="updateEditBillTotals()">
+                            <option value="none">No Discount</option>
+                            <option value="flat">Flat (₹)</option>
+                            <option value="percentage">Percentage (%)</option>
+                        </select>
+                        <input type="number" id="edit-bill-discount-value" min="0" step="0.01" placeholder="0" style="width: 80px; padding: 0.35rem; border-radius: 4px; border: 1px solid var(--border-color);" oninput="updateEditBillTotals()">
+                    </div>
+                </div>
+
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Bill Items</h3>
+                <div id="edit-bill-items-container" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1rem;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="background: var(--bg-body); border-bottom: 1px solid var(--border-color); text-align: left;">
+                                <th style="padding: 8px;">#</th>
+                                <th style="padding: 8px;">Item Name</th>
+                                <th style="padding: 8px; width: 120px;">Qty</th>
+                                <th style="padding: 8px; width: 110px;">Price (₹)</th>
+                                <th style="padding: 8px; width: 100px; text-align: right;">Total (₹)</th>
+                                <th style="padding: 8px; width: 60px; text-align: center;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="edit-bill-items-body">
+                            <!-- Injected Dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add Product Row -->
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;">
+                    <select id="edit-bill-add-product-select" onchange="editBillAddItem()" style="flex: 1; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                        <option value="">-- Add another product --</option>
+                    </select>
+                    <button type="button" class="action-btn primary small" onclick="editBillAddItem()">+ Add Item</button>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-body); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; font-weight: 600;">
+                    <div>Subtotal: <span id="edit-bill-subtotal-display">₹0.00</span></div>
+                    <div style="font-size: 1.1rem; color: var(--primary-color);">Final Amount: <span id="edit-bill-final-display">₹0.00</span></div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn primary">Save Changes</button>
                 </div>
             </form>
         </div>

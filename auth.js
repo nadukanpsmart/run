@@ -128,7 +128,7 @@ async function showApp() {
                 try {
                     const { data: freshOwner } = await supabase
                         .from('owners')
-                        .select('preferred_store_name, business_name, preferred_logo, preferred_address, business_address, bill_note')
+                        .select('preferred_store_name, business_name, preferred_logo, preferred_address, business_address, bill_note, store_gstin, billed_by_name')
                         .eq('id', authState.owner.id)
                         .maybeSingle();
 
@@ -138,6 +138,8 @@ async function showApp() {
                         authState.owner.preferred_logo = freshOwner.preferred_logo || authState.owner.preferred_logo;
                         authState.owner.preferred_address = freshOwner.preferred_address || authState.owner.preferred_address;
                         authState.owner.bill_note = freshOwner.bill_note !== undefined ? freshOwner.bill_note : authState.owner.bill_note;
+                        authState.owner.store_gstin = freshOwner.store_gstin !== undefined ? freshOwner.store_gstin : authState.owner.store_gstin;
+                        authState.owner.billed_by_name = freshOwner.billed_by_name !== undefined ? freshOwner.billed_by_name : authState.owner.billed_by_name;
                         localStorage.setItem('tenant_session', JSON.stringify(authState.owner));
 
                         // Also update appState cache so bill previews use fresh data
@@ -146,13 +148,17 @@ async function showApp() {
                             window.appState.ownerPreferredLogo = freshOwner.preferred_logo || null;
                             window.appState.ownerPreferredAddress = freshOwner.preferred_address || freshOwner.business_address || '';
                             window.appState.ownerBillNote = freshOwner.bill_note || '';
+                            window.appState.ownerGstin = freshOwner.store_gstin || '';
+                            window.appState.ownerBilledByName = freshOwner.billed_by_name || '';
 
                             // Persist to cache
                             localStorage.setItem('owner_pref_cache', JSON.stringify({
                                 name: window.appState.ownerPreferredName,
                                 logo: window.appState.ownerPreferredLogo,
                                 address: window.appState.ownerPreferredAddress,
-                                note: window.appState.ownerBillNote
+                                note: window.appState.ownerBillNote,
+                                gstin: window.appState.ownerGstin,
+                                billed_by: window.appState.ownerBilledByName
                             }));
                         }
                     }

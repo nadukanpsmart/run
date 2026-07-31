@@ -20,6 +20,8 @@ CREATE TABLE public.owners (
     business_address TEXT,
     bill_note TEXT,
     preferred_bill_format TEXT DEFAULT '57mm',
+    store_gstin TEXT,
+    billed_by_name TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -68,6 +70,7 @@ CREATE TABLE public.bills (
     customer_name TEXT,
     customer_phone TEXT,
     customer_gstin TEXT,
+    customer_address TEXT,
     is_undone BOOLEAN DEFAULT false,
     undo_notes TEXT,
     created_by UUID REFERENCES public.owners(id),

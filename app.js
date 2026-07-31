@@ -379,7 +379,7 @@ function renderSales(bills) {
     bills.forEach(bill => {
         const tr = document.createElement('tr');
         const date = new Date(bill.created_at);
-        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = date.toLocaleDateString('en-IN') + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         // Calculate Flat Discount
         let discountDisplay = '₹0.00';
@@ -401,6 +401,9 @@ function renderSales(bills) {
         if (bill.customer_gstin) {
             customerDisplay = customerDisplay !== 'N/A' ? `${customerDisplay} | GSTIN: ${bill.customer_gstin}` : `GSTIN: ${bill.customer_gstin}`;
         }
+        if (bill.customer_address) {
+            customerDisplay = customerDisplay !== 'N/A' ? `${customerDisplay} | Addr: ${bill.customer_address}` : `Addr: ${bill.customer_address}`;
+        }
 
         // Actions
         let actionHtml = '';
@@ -413,8 +416,9 @@ function renderSales(bills) {
                 waAction = `<button onclick="sendWhatsAppReceipt('${bill.id}')" class="action-btn small" style="background:#25D366; color:white; border-color:#25D366; margin-right:4px;">WhatsApp</button>`;
             }
             let printAction = `<button onclick="reprintBill('${bill.id}')" class="action-btn small" style="background:#4b5563; color:white; border-color:#4b5563; margin-right:4px;">Print</button>`;
+            let editAction = `<button onclick="openEditBillModal('${bill.id}')" class="action-btn small" style="background:#2563eb; color:white; border-color:#2563eb; margin-right:4px;">Edit</button>`;
             let undoAction = `<button onclick="openUndoModal('${bill.id}', '${bill.bill_number || ''}')" class="action-btn small danger">Undo</button>`;
-            actionHtml = waAction + printAction + undoAction;
+            actionHtml = waAction + printAction + editAction + undoAction;
         }
 
         tr.innerHTML = `
@@ -1288,6 +1292,7 @@ async function generateBill() {
     const customerName = document.getElementById('customer-name').value.trim();
     const customerPhone = document.getElementById('customer-phone').value.trim();
     const customerGstin = (document.getElementById('customer-gstin')?.value || '').trim().toUpperCase();
+    const customerAddress = (document.getElementById('customer-address')?.value || '').trim();
 
     // Generate Bill Number: Today's Date YYMMDD + Continuous Sequence ps001, ps002, ps003...
     const now = new Date();
@@ -1334,6 +1339,7 @@ async function generateBill() {
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_gstin: customerGstin,
+        customer_address: customerAddress,
         bill_number: billNumber,
         tenant_id: authState.owner.tenant_id,
         created_by: authState.owner.id
@@ -1345,12 +1351,16 @@ async function generateBill() {
         .select()
         .single();
 
-    if (billError && billError.message && billError.message.includes('customer_gstin')) {
-        delete billPayload.customer_gstin;
+    if (billError && billError.message && (billError.message.includes('customer_address') || billError.message.includes('customer_gstin'))) {
+        if (billError.message.includes('customer_address')) delete billPayload.customer_address;
+        if (billError.message.includes('customer_gstin')) delete billPayload.customer_gstin;
         const res = await supabase.from('bills').insert([billPayload]).select().single();
         billData = res.data;
         billError = res.error;
-        if (billData) billData.customer_gstin = customerGstin;
+        if (billData) {
+            billData.customer_gstin = customerGstin;
+            billData.customer_address = customerAddress;
+        }
     }
 
     if (billError) {
@@ -1470,6 +1480,8 @@ function showBillPreview(bill, items) {
     let storeLogo = null;
     let billNote = "";
     let billFormat = "57mm";
+    let storeGstin = "";
+    let billedByName = (authState.owner ? authState.owner.full_name : 'Unknown');
 
     if (authState.owner) {
         storeName = authState.owner.preferred_store_name || authState.owner.business_name || "Na Dukan";
@@ -1477,6 +1489,8 @@ function showBillPreview(bill, items) {
         storeLogo = authState.owner.preferred_logo;
         billNote = authState.owner.bill_note || "";
         billFormat = authState.owner.preferred_bill_format || "57mm";
+        storeGstin = authState.owner.store_gstin || "";
+        if (authState.owner.billed_by_name) billedByName = authState.owner.billed_by_name;
     }
     // Check local cache
     if (appState.ownerPreferredName) storeName = appState.ownerPreferredName;
@@ -1484,9 +1498,11 @@ function showBillPreview(bill, items) {
     if (appState.ownerPreferredAddress) storeAddress = appState.ownerPreferredAddress;
     if (appState.ownerBillNote) billNote = appState.ownerBillNote;
     if (appState.ownerPreferredBillFormat) billFormat = appState.ownerPreferredBillFormat;
+    if (appState.ownerGstin) storeGstin = appState.ownerGstin;
+    if (appState.ownerBilledByName) billedByName = appState.ownerBilledByName;
 
     const date = new Date(bill.created_at);
-    const dateStr = date.toLocaleDateString();
+    const dateStr = date.toLocaleDateString('en-IN');
     const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const billDisplay = bill.bill_number || bill.id.slice(0, 8);
@@ -1671,35 +1687,70 @@ function showBillPreview(bill, items) {
             @media print {
                 html, body {
                     height: auto !important;
+                    max-height: none !important;
                     overflow: visible !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     background: white !important;
                 }
-                #main-app, #auth-wrapper, #toast-notification { display: none !important; }
+                #main-app, #auth-wrapper, #toast-notification, .modal-actions { display: none !important; }
                 body * { visibility: hidden; }
                 .receipt-a4, .receipt-a4 * { visibility: visible; }
                 #modal-overlay {
-                    position: fixed; left: 0; top: 0;
-                    width: 100vw; height: 100vh;
-                    background: none; display: block !important;
-                    padding: 0; margin: 0;
+                    position: static !important;
+                    left: auto !important; top: auto !important;
+                    width: 100% !important; height: auto !important;
+                    max-height: none !important;
+                    background: none !important; display: block !important;
+                    padding: 0 !important; margin: 0 !important;
+                    overflow: visible !important;
+                    box-shadow: none !important;
                 }
                 #modal-bill-preview {
-                    position: fixed; left: 0; top: 0;
-                    margin: 0; padding: 0;
-                    box-shadow: none; border: none;
-                    height: auto; width: 100vw; max-width: none;
-                    overflow: visible;
+                    position: static !important;
+                    left: auto !important; top: auto !important;
+                    margin: 0 !important; padding: 0 !important;
+                    box-shadow: none !important; border: none !important;
+                    height: auto !important; max-height: none !important;
+                    width: 100% !important; max-width: none !important;
+                    overflow: visible !important;
+                    background: transparent !important;
+                    border-radius: 0 !important;
+                }
+                #receipt-preview-content {
+                    position: static !important;
+                    width: 100% !important;
+                    height: auto !important;
+                    max-height: none !important;
+                    overflow: visible !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
                 }
                 .receipt-a4 {
-                    width: 100%;
-                    margin: 0; border: none;
+                    position: static !important;
+                    width: 100% !important;
+                    height: auto !important;
+                    max-height: none !important;
+                    margin: 0 !important;
+                    padding: 8mm 10mm !important;
+                    border: none !important;
+                    overflow: visible !important;
+                    box-shadow: none !important;
                 }
-                .modal-actions { display: none !important; }
+                .a4-table thead {
+                    display: table-header-group;
+                }
+                .a4-table tr {
+                    page-break-inside: avoid !important;
+                    break-inside: avoid !important;
+                }
+                .a4-totals-section, .a4-footer {
+                    page-break-inside: avoid !important;
+                    break-inside: avoid !important;
+                }
                 @page {
-                    size: A4;
-                    margin: 0;
+                    size: A4 portrait;
+                    margin: 8mm 0;
                 }
             }
         </style>
@@ -1707,6 +1758,7 @@ function showBillPreview(bill, items) {
             <div class="a4-header">
                 ${storeLogo ? `<img src="${storeLogo}" style="height: 50px; max-width: 160px; object-fit: contain; display: block; margin: 0 auto 6px auto;">` : ''}
                 <h1>${storeName}</h1>
+                ${storeGstin ? `<div class="address" style="font-weight: 700; color: #111; letter-spacing: 0.5px; margin-top: 2px;">GSTIN: ${storeGstin}</div>` : ''}
                 ${storeAddress ? `<div class="address">${storeAddress}</div>` : ''}
             </div>
 
@@ -1722,7 +1774,8 @@ function showBillPreview(bill, items) {
                 <div class="right">
                     <strong>Date:</strong> ${dateStr}<br>
                     <strong>Time:</strong> ${timeStr}<br>
-                    <strong>Billed By:</strong> ${authState.owner ? authState.owner.full_name : 'Unknown'}
+                    <strong>Billed By:</strong> ${billedByName}
+                    ${bill.customer_address ? `<div style="margin-top: 4px; white-space: pre-wrap; font-size: 0.9em; line-height: 1.3;"><strong>Cust. Address:</strong><br>${bill.customer_address}</div>` : ''}
                 </div>
             </div>
 
@@ -1835,12 +1888,13 @@ function showBillPreview(bill, items) {
                 @media print {
                     html, body {
                         height: auto !important;
+                        max-height: none !important;
                         overflow: visible !important;
                         margin: 0 !important;
                         padding: 0 !important;
                         background: none !important;
                     }
-                    #main-app, #auth-wrapper, #toast-notification {
+                    #main-app, #auth-wrapper, #toast-notification, .modal-actions {
                         display: none !important;
                     }
                     body * {
@@ -1850,40 +1904,63 @@ function showBillPreview(bill, items) {
                         visibility: visible;
                     }
                     #modal-overlay {
-                        position: absolute;
-                        left: 0;
-                        top: 0;
-                        width: auto;
-                        height: auto;
-                        background: none;
+                        position: static !important;
+                        left: auto !important;
+                        top: auto !important;
+                        width: 100% !important;
+                        height: auto !important;
+                        max-height: none !important;
+                        background: none !important;
                         display: block !important;
-                        align-items: flex-start;
-                        justify-content: flex-start;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        overflow: visible !important;
+                        box-shadow: none !important;
                     }
                     #modal-bill-preview {
-                        position: absolute;
-                        left: 0;
-                        top: 0;
-                        margin: 0;
-                        padding: 0;
-                        box-shadow: none;
-                        border: none;
-                        height: auto;
-                        width: 58mm;
+                        position: static !important;
+                        left: auto !important;
+                        top: auto !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                        height: auto !important;
+                        max-height: none !important;
+                        width: 58mm !important;
+                        overflow: visible !important;
+                        background: transparent !important;
+                        border-radius: 0 !important;
+                    }
+                    #receipt-preview-content {
+                        position: static !important;
+                        width: 58mm !important;
+                        height: auto !important;
+                        max-height: none !important;
+                        overflow: visible !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                     }
                     .receipt {
-                        position: relative;
-                        left: 0;
-                        top: 0;
-                        width: 58mm;
-                        margin: 0;
-                        padding: 0 3mm;
-                        border: none;
-                        page-break-after: avoid;
-                        page-break-before: avoid;
-                        page-break-inside: avoid;
+                        position: static !important;
+                        left: auto !important;
+                        top: auto !important;
+                        width: 58mm !important;
+                        height: auto !important;
+                        max-height: none !important;
+                        margin: 0 !important;
+                        padding: 0 3mm !important;
+                        border: none !important;
+                        overflow: visible !important;
+                        page-break-after: auto !important;
+                        page-break-before: auto !important;
+                        page-break-inside: auto !important;
+                        break-inside: auto !important;
                     }
-                    .modal-actions { display: none !important; }
+                    .receipt .row {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                    }
                     @page { margin: 0; }
                 }
             </style>
@@ -1891,6 +1968,7 @@ function showBillPreview(bill, items) {
               <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 4px;">
                    ${storeLogo ? `<img src="${storeLogo}" style="height: 35px; width: auto; max-width: 120px; object-fit: contain; margin-bottom: 4px;">` : ''}
                    <div class="bold center" style="text-transform:uppercase; font-size:16px; width: 100%;">${storeName}</div>
+                   ${storeGstin ? `<div class="bold center" style="font-size: 11px; margin-top: 2px;">GSTIN: ${storeGstin}</div>` : ''}
               </div>
               ${storeAddress ? `<div class="center" style="font-size: 10px; margin-bottom: 5px;">${storeAddress}</div>` : ''}
               <div class="divider"></div>
@@ -1927,8 +2005,9 @@ function showBillPreview(bill, items) {
 
               <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
                 <span>Mode: ${bill.payment_mode}</span>
-                <span>Billed By: ${authState.owner ? authState.owner.full_name : 'Unknown'}</span>
+                <span>Billed By: ${billedByName}</span>
               </div>
+              ${bill.customer_address ? `<div style="font-size: 11px; text-align: right; margin-top: 4px; white-space: pre-wrap; line-height: 1.2;">Address:<br>${bill.customer_address}</div>` : ''}
 
               <br>
               ${billNote ? `<div class="center" style="white-space: pre-wrap; margin-bottom: 8px;">${billNote}</div>` : ''}
@@ -1988,6 +2067,7 @@ function closeBillPreview() {
     document.getElementById('customer-name').value = '';
     document.getElementById('customer-phone').value = '';
     if (document.getElementById('customer-gstin')) document.getElementById('customer-gstin').value = '';
+    if (document.getElementById('customer-address')) document.getElementById('customer-address').value = '';
 
     renderCart();
 
@@ -3096,9 +3176,11 @@ async function loadSettings() {
         const prefCard = document.getElementById('settings-preferences-card');
         prefCard.classList.remove('hidden');
 
-        // PREF: Store Name, Address, Logo
+        // PREF: Store Name, Address, Logo, GSTIN, Billed By
         const nameInput = document.getElementById('pref-store-name');
         const addressInput = document.getElementById('pref-store-address');
+        const gstinInput = document.getElementById('pref-store-gstin');
+        const billedByInput = document.getElementById('pref-billed-by');
         const billNoteInput = document.getElementById('pref-bill-note');
         const formatInput = document.getElementById('pref-bill-format');
         const logoInput = document.getElementById('pref-logo-input');
@@ -3114,6 +3196,13 @@ async function loadSettings() {
             // Default preferred address to business address if not set
             if (addressInput) {
                 addressInput.value = user.preferred_address || user.business_address || '';
+            }
+
+            if (gstinInput) {
+                gstinInput.value = user.store_gstin || '';
+            }
+            if (billedByInput) {
+                billedByInput.value = user.billed_by_name || '';
             }
 
             if (billNoteInput) {
@@ -3179,6 +3268,8 @@ async function loadSettings() {
                 saveAllBtn.onclick = async () => {
                     const newName = nameInput.value.trim();
                     const newAddress = addressInput ? addressInput.value.trim() : '';
+                    const newGstin = gstinInput ? gstinInput.value.trim().toUpperCase() : '';
+                    const newBilledBy = billedByInput ? billedByInput.value.trim() : '';
                     const newNote = billNoteInput ? billNoteInput.value.trim() : '';
                     const newFormat = formatInput ? formatInput.value : '57mm';
                     let newLogo = user.preferred_logo; // Default to existing
@@ -3198,17 +3289,26 @@ async function loadSettings() {
                         preferred_address: newAddress,
                         preferred_logo: newLogo,
                         bill_note: newNote,
-                        preferred_bill_format: newFormat
+                        preferred_bill_format: newFormat,
+                        store_gstin: newGstin,
+                        billed_by_name: newBilledBy
                     };
 
-                    const { error } = await supabase
+                    let { error } = await supabase
                         .from('owners')
                         .update(updates)
                         .eq('id', user.id);
 
+                    if (error && error.message && (error.message.includes('store_gstin') || error.message.includes('billed_by_name'))) {
+                        if (error.message.includes('store_gstin')) delete updates.store_gstin;
+                        if (error.message.includes('billed_by_name')) delete updates.billed_by_name;
+                        const res = await supabase.from('owners').update(updates).eq('id', user.id);
+                        error = res.error;
+                    }
+
                     if (error) {
                         console.error("Save Error", error);
-                        alert("Failed to save preferences. check console.");
+                        alert("Failed to save preferences. Check console.");
                     } else {
                         showToast("Preferences Updated Successfully!");
                         // Update Local State
@@ -3217,6 +3317,8 @@ async function loadSettings() {
                         authState.owner.preferred_logo = newLogo;
                         authState.owner.bill_note = newNote;
                         authState.owner.preferred_bill_format = newFormat;
+                        authState.owner.store_gstin = newGstin;
+                        authState.owner.billed_by_name = newBilledBy;
                         localStorage.setItem('tenant_session', JSON.stringify(authState.owner));
 
                         // FIX: Also update appState cache so bill previews use the new data immediately
@@ -3224,13 +3326,17 @@ async function loadSettings() {
                         appState.ownerPreferredLogo = newLogo;
                         appState.ownerPreferredAddress = newAddress;
                         appState.ownerBillNote = newNote;
+                        appState.ownerGstin = newGstin;
+                        appState.ownerBilledByName = newBilledBy;
 
                         // Persist to owner_pref_cache so employees & other sessions get it on next load
                         localStorage.setItem('owner_pref_cache', JSON.stringify({
                             name: newName,
                             logo: newLogo,
                             address: newAddress,
-                            note: newNote
+                            note: newNote,
+                            gstin: newGstin,
+                            billed_by: newBilledBy
                         }));
 
                         updateBranding();
@@ -4260,7 +4366,7 @@ async function exportSalesCSV() {
     const validExportBills = bills.filter(b => !b.is_undone);
     bills = validExportBills;
 
-    const headers = ["Bill Number", "Date", "Customer Name", "Customer Phone", "Customer GSTIN", "Payment Mode", "Subtotal", "Discount Type", "Discount Value", "Final Amount"];
+    const headers = ["Bill Number", "Date", "Customer Name", "Customer Phone", "Customer GSTIN", "Customer Address", "Payment Mode", "Subtotal", "Discount Type", "Discount Value", "Final Amount"];
     let csvContent = headers.join(",") + "\n";
 
     bills.forEach(b => {
@@ -4268,6 +4374,7 @@ async function exportSalesCSV() {
         const cName = b.customer_name ? b.customer_name.replace(/"/g, '""') : "";
         const cPhone = b.customer_phone ? b.customer_phone.replace(/"/g, '""') : "";
         const cGstin = b.customer_gstin ? b.customer_gstin.replace(/"/g, '""') : "";
+        const cAddr = b.customer_address ? b.customer_address.replace(/"/g, '""') : "";
         const bNum = b.bill_number ? b.bill_number.replace(/"/g, '""') : "";
 
         const row = [
@@ -4276,6 +4383,7 @@ async function exportSalesCSV() {
             `"${cName}"`,
             `"${cPhone}"`,
             `"${cGstin}"`,
+            `"${cAddr}"`,
             `"${b.payment_mode || 'CASH'}"`,
             b.subtotal || 0,
             `"${b.discount_type || 'none'}"`,
@@ -4469,5 +4577,321 @@ document.getElementById('undo-bill-form').addEventListener('submit', async (e) =
     if (typeof loadSales === 'function') loadSales();
     if (typeof loadInventory === 'function') loadInventory();
     if (typeof loadDashboard === 'function') loadDashboard('today');
+});
+
+// ==========================================
+// EDIT BILL LOGIC
+// ==========================================
+let editBillState = {
+    billId: null,
+    items: []
+};
+
+async function openEditBillModal(billId) {
+    if (!supabase) return;
+    try {
+        // Ensure products are loaded into appState.products
+        if (!appState.products || appState.products.length === 0) {
+            const { data: prods } = await supabase.from('products').select('*').order('name');
+            if (prods) appState.products = prods;
+        }
+
+        const { data: bill, error: billError } = await supabase
+            .from('bills')
+            .select('*')
+            .eq('id', billId)
+            .single();
+
+        if (billError || !bill) throw billError;
+
+        const { data: items, error: itemsError } = await supabase
+            .from('bill_items')
+            .select('*')
+            .eq('bill_id', billId);
+
+        if (itemsError || !items) throw itemsError;
+
+        editBillState.billId = bill.id;
+        editBillState.items = items.map(item => ({
+            id: item.id,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            quantity: Number(item.quantity) || 1,
+            price: Number(item.price) || 0
+        }));
+
+        document.getElementById('edit-bill-id').value = bill.id;
+        document.getElementById('edit-bill-number-title').textContent = '#' + (bill.bill_number || bill.id.slice(0, 8));
+        document.getElementById('edit-bill-customer-name').value = bill.customer_name || '';
+        document.getElementById('edit-bill-customer-phone').value = bill.customer_phone || '';
+        document.getElementById('edit-bill-customer-gstin').value = bill.customer_gstin || '';
+        document.getElementById('edit-bill-customer-address').value = bill.customer_address || bill.customer_dress || '';
+
+        const paymodeRadios = document.getElementsByName('edit-paymode');
+        paymodeRadios.forEach(r => {
+            r.checked = (r.value === (bill.payment_mode || 'CASH'));
+        });
+
+        document.getElementById('edit-bill-discount-type').value = bill.discount_type || 'none';
+        document.getElementById('edit-bill-discount-value').value = bill.discount_value || 0;
+
+        populateEditBillProductDropdown();
+        renderEditBillItems();
+        updateEditBillTotals();
+
+        document.getElementById('modal-overlay').classList.remove('hidden');
+        document.getElementById('modal-edit-bill').classList.remove('hidden');
+
+    } catch (err) {
+        console.error('Error loading bill for edit:', err);
+        alert('Could not load bill details for editing.');
+    }
+}
+
+function populateEditBillProductDropdown() {
+    const prodSelect = document.getElementById('edit-bill-add-product-select');
+    if (!prodSelect) return;
+
+    prodSelect.innerHTML = '<option value="">-- Select product to add to bill --</option>';
+    if (appState.products && appState.products.length > 0) {
+        appState.products.forEach(p => {
+            prodSelect.innerHTML += `<option value="${p.id}">${p.name} (₹${Number(p.price).toFixed(2)})</option>`;
+        });
+    }
+}
+
+function renderEditBillItems() {
+    const tbody = document.getElementById('edit-bill-items-body');
+    if (!tbody) return;
+
+    if (!editBillState.items || editBillState.items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 16px; color: #888;">No items in this bill. Select a product below to add items.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    editBillState.items.forEach((item, index) => {
+        const lineTotal = (item.quantity * item.price).toFixed(2);
+        html += `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 8px;">${index + 1}</td>
+                <td style="padding: 8px; font-weight: 600; min-width: 120px;">${item.product_name}</td>
+                <td style="padding: 8px;">
+                    <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: var(--bg-surface);">
+                        <button type="button" onclick="editBillChangeQty(${index}, -1)" style="padding: 4px 8px; border: none; background: var(--bg-body); cursor: pointer; font-weight: bold; font-size: 1rem; color: var(--text-primary);">-</button>
+                        <input type="number" min="1" value="${item.quantity}" style="width: 45px; text-align: center; border: none; padding: 4px 2px; font-weight: 600; background: transparent; color: var(--text-primary);" oninput="editBillUpdateItemQty(${index}, this.value)" onchange="editBillUpdateItemQty(${index}, this.value)">
+                        <button type="button" onclick="editBillChangeQty(${index}, 1)" style="padding: 4px 8px; border: none; background: var(--bg-body); cursor: pointer; font-weight: bold; font-size: 1rem; color: var(--text-primary);">+</button>
+                    </div>
+                </td>
+                <td style="padding: 8px;">
+                    <input type="number" min="0" step="0.01" value="${item.price}" style="width: 85px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-surface); color: var(--text-primary);" oninput="editBillUpdateItemPrice(${index}, this.value)" onchange="editBillUpdateItemPrice(${index}, this.value)">
+                </td>
+                <td id="edit-bill-item-total-${index}" style="padding: 8px; text-align: right; font-weight: 700; color: var(--primary-color);">₹${lineTotal}</td>
+                <td style="padding: 8px; text-align: center;">
+                    <button type="button" class="action-btn small danger" onclick="editBillRemoveItem(${index})" style="padding: 4px 8px; border-radius: 4px;">✕</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
+function editBillChangeQty(index, delta) {
+    if (!editBillState.items[index]) return;
+    let currentQty = editBillState.items[index].quantity || 1;
+    currentQty += delta;
+    if (currentQty < 1) currentQty = 1;
+    editBillState.items[index].quantity = currentQty;
+    renderEditBillItems();
+    updateEditBillTotals();
+}
+
+function editBillUpdateItemQty(index, newQty) {
+    if (!editBillState.items[index]) return;
+    const qty = parseInt(newQty, 10);
+    if (isNaN(qty) || qty < 1) {
+        editBillState.items[index].quantity = 1;
+    } else {
+        editBillState.items[index].quantity = qty;
+    }
+    const lineTotalDisplay = document.getElementById(`edit-bill-item-total-${index}`);
+    if (lineTotalDisplay) {
+        lineTotalDisplay.textContent = `₹${(editBillState.items[index].quantity * editBillState.items[index].price).toFixed(2)}`;
+    }
+    updateEditBillTotals();
+}
+
+function editBillUpdateItemPrice(index, newPrice) {
+    if (!editBillState.items[index]) return;
+    const price = parseFloat(newPrice);
+    if (isNaN(price) || price < 0) {
+        editBillState.items[index].price = 0;
+    } else {
+        editBillState.items[index].price = price;
+    }
+    const lineTotalDisplay = document.getElementById(`edit-bill-item-total-${index}`);
+    if (lineTotalDisplay) {
+        lineTotalDisplay.textContent = `₹${(editBillState.items[index].quantity * editBillState.items[index].price).toFixed(2)}`;
+    }
+    updateEditBillTotals();
+}
+
+function editBillRemoveItem(index) {
+    editBillState.items.splice(index, 1);
+    renderEditBillItems();
+    updateEditBillTotals();
+}
+
+function editBillAddItem() {
+    const select = document.getElementById('edit-bill-add-product-select');
+    if (!select || !select.value) return;
+
+    const prodId = select.value;
+    const prod = (appState.products || []).find(p => p.id === prodId);
+    if (!prod) return;
+
+    const existingIndex = editBillState.items.findIndex(item => item.product_id === prodId);
+    if (existingIndex > -1) {
+        editBillState.items[existingIndex].quantity += 1;
+    } else {
+        editBillState.items.push({
+            product_id: prod.id,
+            product_name: prod.name,
+            quantity: 1,
+            price: Number(prod.price) || 0
+        });
+    }
+
+    select.value = '';
+    renderEditBillItems();
+    updateEditBillTotals();
+
+    setTimeout(() => {
+        const container = document.getElementById('edit-bill-items-container');
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }, 50);
+}
+
+function updateEditBillTotals() {
+    let subtotal = 0;
+    if (editBillState.items) {
+        editBillState.items.forEach(item => {
+            subtotal += (item.quantity * item.price);
+        });
+    }
+
+    const discountType = document.getElementById('edit-bill-discount-type')?.value || 'none';
+    const discountVal = parseFloat(document.getElementById('edit-bill-discount-value')?.value) || 0;
+
+    let final = subtotal;
+    if (discountType === 'flat') final = subtotal - discountVal;
+    if (discountType === 'percentage') final = subtotal - (subtotal * (discountVal / 100));
+    if (final < 0) final = 0;
+
+    const subDisplay = document.getElementById('edit-bill-subtotal-display');
+    const finalDisplay = document.getElementById('edit-bill-final-display');
+    if (subDisplay) subDisplay.textContent = `₹${subtotal.toFixed(2)}`;
+    if (finalDisplay) finalDisplay.textContent = `₹${final.toFixed(2)}`;
+}
+
+document.getElementById('edit-bill-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const billId = document.getElementById('edit-bill-id').value;
+    if (!billId) return;
+
+    if (!editBillState.items || editBillState.items.length === 0) {
+        alert('A bill must have at least 1 item.');
+        return;
+    }
+
+    const customerName = document.getElementById('edit-bill-customer-name').value.trim();
+    const customerPhone = document.getElementById('edit-bill-customer-phone').value.trim();
+    const customerGstin = (document.getElementById('edit-bill-customer-gstin')?.value || '').trim().toUpperCase();
+    const customerAddress = (document.getElementById('edit-bill-customer-address')?.value || '').trim();
+
+    const paymentMode = document.querySelector('input[name="edit-paymode"]:checked')?.value || 'CASH';
+    const discountType = document.getElementById('edit-bill-discount-type').value;
+    const discountValue = parseFloat(document.getElementById('edit-bill-discount-value').value) || 0;
+
+    let subtotal = 0;
+    editBillState.items.forEach(item => {
+        subtotal += (item.quantity * item.price);
+    });
+
+    let final = subtotal;
+    if (discountType === 'flat') final = subtotal - discountValue;
+    if (discountType === 'percentage') final = subtotal - (subtotal * (discountValue / 100));
+    if (final < 0) final = 0;
+
+    const billPayload = {
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        customer_gstin: customerGstin,
+        customer_address: customerAddress,
+        payment_mode: paymentMode,
+        subtotal: subtotal,
+        discount_type: discountType,
+        discount_value: discountValue,
+        final_amount: final
+    };
+
+    let { error: updateError } = await supabase
+        .from('bills')
+        .update(billPayload)
+        .eq('id', billId);
+
+    if (updateError && updateError.message && (updateError.message.includes('customer_address') || updateError.message.includes('customer_gstin'))) {
+        if (updateError.message.includes('customer_address')) delete billPayload.customer_address;
+        if (updateError.message.includes('customer_gstin')) delete billPayload.customer_gstin;
+        const res = await supabase.from('bills').update(billPayload).eq('id', billId);
+        updateError = res.error;
+    }
+
+    if (updateError) {
+        alert('Failed to update bill: ' + updateError.message);
+        return;
+    }
+
+    // 2. Replace Bill Items in Supabase
+    const { error: deleteError } = await supabase
+        .from('bill_items')
+        .delete()
+        .eq('bill_id', billId);
+
+    if (deleteError) {
+        console.error('Error removing old bill items:', deleteError);
+    }
+
+    const tenantId = authState.owner ? authState.owner.tenant_id : '';
+    const newItemsPayload = editBillState.items.map(item => ({
+        bill_id: billId,
+        product_id: item.product_id || null,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        price: item.price,
+        tenant_id: tenantId
+    }));
+
+    const { error: insertError } = await supabase
+        .from('bill_items')
+        .insert(newItemsPayload);
+
+    if (insertError) {
+        console.error('Error inserting updated bill items:', insertError);
+    }
+
+    showToast('Bill updated successfully!');
+    closeModals();
+
+    // Refresh Sales View & Dashboard
+    if (typeof loadSales === 'function') loadSales();
+    if (typeof loadDashboard === 'function') loadDashboard('today');
+
+    // Re-preview updated bill
+    reprintBill(billId);
 });
 

@@ -2791,3 +2791,34 @@ body {
     background: #b71c1c;
 }
 
+/* Global Print Overrides for Modal Containers */
+@media print {
+    .modal-overlay {
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        background: transparent !important;
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    .modal {
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        animation: none !important;
+    }
+}
