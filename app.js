@@ -5008,6 +5008,7 @@ function renderCustomers() {
                 <td>${balanceText}</td>
                 <td>
                     <button class="action-btn small" onclick="openHistoryModal('customer', '${c.id}')">History</button>
+                    <button class="action-btn small primary" onclick="openRecordPaymentModal('customer', '${c.id}')" style="margin-left: 0.5rem;">Payment</button>
                     <button class="action-btn small" onclick="openEditCustomerModal('${c.id}')" style="margin-left: 0.5rem;">Edit</button>
                     <button class="action-btn small danger" onclick="deleteCustomer('${c.id}')" style="margin-left: 0.5rem;">Delete</button>
                 </td>
@@ -5675,6 +5676,7 @@ function renderSuppliers() {
                     <td>${balanceText}</td>
                     <td>
                         <button class="action-btn small" onclick="openHistoryModal('supplier', '${s.id}')">History</button>
+                        <button class="action-btn small primary" onclick="openRecordPaymentModal('supplier', '${s.id}')" style="margin-left: 0.5rem;">Payment</button>
                         <button class="action-btn small" onclick="openEditSupplierModal('${s.id}')" style="margin-left: 0.5rem;">Edit</button>
                         <button class="action-btn small danger" onclick="deleteSupplier('${s.id}')" style="margin-left: 0.5rem;">Delete</button>
                     </td>
@@ -5809,7 +5811,29 @@ async function openHistoryModal(type, id) {
     document.getElementById('modal-history').classList.remove('hidden');
 
     try {
-        let html = '';
+        let historyItems = [];
+
+        // Fetch ledger transactions for this entity
+        const { data: ledgerData, error: ledgerError } = await supabase
+            .from('ledger_transactions')
+            .select('*')
+            .eq('tenant_id', authState.owner.tenant_id)
+            .eq('entity_type', type)
+            .eq('entity_id', id);
+        
+        if (ledgerError) console.error("Error fetching ledger:", ledgerError);
+        else if (ledgerData) {
+            ledgerData.forEach(tx => {
+                let formattedType = tx.transaction_type.replace('_', ' ');
+                historyItems.push({
+                    date: new Date(tx.transaction_date || tx.created_at),
+                    title: formattedType + (tx.notes ? ` - ${tx.notes}` : ''),
+                    amount: tx.amount,
+                    isLedger: true
+                });
+            });
+        }
+
         if (type === 'customer') {
             const customer = appState.customers.find(c => c.id === id);
             document.getElementById('modal-history-title').textContent = `History: ${customer?.name || 'Customer'}`;
@@ -5820,27 +5844,19 @@ async function openHistoryModal(type, id) {
                 query = query.eq('customer_phone', customer.phone);
             } else if (customer?.name) {
                 query = query.eq('customer_name', customer.name);
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No history found.</td></tr>';
-                return;
             }
             
-            const { data, error } = await query.order('created_at', { ascending: false });
-            if (error) throw error;
-            
-            if (!data || data.length === 0) {
-                html = '<tr><td colspan="4" style="text-align:center;">No bills found.</td></tr>';
-            } else {
+            const { data, error } = await query;
+            if (error) console.error("Error fetching bills:", error);
+            else if (data) {
                 data.forEach(bill => {
-                    const date = new Date(bill.created_at).toLocaleDateString();
-                    html += `
-                        <tr style="border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="reprintBill('${bill.id}')" title="Click to Print">
-                            <td>${date}</td>
-                            <td>${bill.bill_number || '-'}</td>
-                            <td style="font-weight:bold;">₹${parseFloat(bill.final_amount).toFixed(2)}</td>
-                            <td><button class="action-btn small" onclick="event.stopPropagation(); reprintBill('${bill.id}')">Print</button></td>
-                        </tr>
-                    `;
+                    historyItems.push({
+                        date: new Date(bill.created_at),
+                        title: `Bill ${bill.bill_number || '-'}`,
+                        amount: bill.final_amount,
+                        action: `<button class="action-btn small" onclick="event.stopPropagation(); reprintBill('${bill.id}')">Print</button>`,
+                        actionClick: `reprintBill('${bill.id}')`
+                    });
                 });
             }
         } else if (type === 'supplier') {
@@ -5853,36 +5869,143 @@ async function openHistoryModal(type, id) {
                 query = query.eq('supplier_phone', supplier.phone);
             } else if (supplier?.name) {
                 query = query.eq('supplier_name', supplier.name);
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No history found.</td></tr>';
-                return;
             }
 
-            const { data, error } = await query.order('entry_date', { ascending: false });
-            if (error) throw error;
-
-            if (!data || data.length === 0) {
-                html = '<tr><td colspan="4" style="text-align:center;">No purchases found.</td></tr>';
-            } else {
+            const { data, error } = await query;
+            if (error) console.error("Error fetching purchases:", error);
+            else if (data) {
                 data.forEach(slip => {
-                    const date = new Date(slip.entry_date).toLocaleDateString();
-                    html += `
-                        <tr style="border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="printPurchaseSlip('${slip.id}')" title="Click to Print">
-                            <td>${date}</td>
-                            <td>${slip.invoice_number || '-'}</td>
-                            <td style="font-weight:bold;">₹${parseFloat(slip.total_amount).toFixed(2)}</td>
-                            <td><button class="action-btn small" onclick="event.stopPropagation(); printPurchaseSlip('${slip.id}')">Print</button></td>
-                        </tr>
-                    `;
+                    historyItems.push({
+                        date: new Date(slip.entry_date || slip.created_at),
+                        title: `Purchase Slip ${slip.invoice_number || '-'}`,
+                        amount: slip.total_amount,
+                        action: `<button class="action-btn small" onclick="event.stopPropagation(); printPurchaseSlip('${slip.id}')">Print</button>`,
+                        actionClick: `printPurchaseSlip('${slip.id}')`
+                    });
                 });
             }
         }
+
+        // Sort items by date descending
+        historyItems.sort((a, b) => b.date - a.date);
+
+        let html = '';
+        if (historyItems.length === 0) {
+            html = '<tr><td colspan="4" style="text-align:center;">No history found.</td></tr>';
+        } else {
+            historyItems.forEach(item => {
+                const dateStr = item.date.toLocaleDateString();
+                const trStyle = item.actionClick ? `style="border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="${item.actionClick}"` : `style="border-bottom: 1px solid var(--border-color);"`;
+                html += `
+                    <tr ${trStyle}>
+                        <td>${dateStr}</td>
+                        <td>${item.title}</td>
+                        <td style="font-weight:bold;">₹${parseFloat(item.amount).toFixed(2)}</td>
+                        <td>${item.action || '-'}</td>
+                    </tr>
+                `;
+            });
+        }
+        
         tbody.innerHTML = html;
     } catch (err) {
         console.error("Error loading history:", err);
         tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Error: ${err.message}</td></tr>`;
     }
 }
+
+// ==========================================
+// RECORD PAYMENT / ADJUSTMENT
+// ==========================================
+function openRecordPaymentModal(type, id) {
+    document.getElementById('payment-entity-type').value = type;
+    document.getElementById('payment-entity-id').value = id;
+    document.getElementById('record-payment-form').reset();
+    document.getElementById('payment-date').value = new Date().toISOString().split('T')[0];
+    
+    let title = type === 'customer' ? 'Record Customer Payment' : 'Record Supplier Payment';
+    document.getElementById('modal-payment-title').textContent = title;
+    
+    document.getElementById('modal-record-payment').classList.remove('hidden');
+    document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+document.getElementById('record-payment-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const type = document.getElementById('payment-entity-type').value;
+    const id = document.getElementById('payment-entity-id').value;
+    const txType = document.getElementById('payment-type').value;
+    const amount = parseFloat(document.getElementById('payment-amount').value);
+    const date = document.getElementById('payment-date').value;
+    const notes = document.getElementById('payment-notes').value.trim();
+
+    if (!amount || amount <= 0) return alert('Amount must be greater than 0');
+
+    try {
+        // Insert transaction
+        const { error: txError } = await supabase.from('ledger_transactions').insert([{
+            tenant_id: authState.owner.tenant_id,
+            entity_type: type,
+            entity_id: id,
+            transaction_type: txType,
+            amount: amount,
+            transaction_date: date,
+            notes: notes
+        }]);
+
+        if (txError) throw txError;
+
+        // Calculate new balance
+        let entity = null;
+        let table = '';
+        if (type === 'customer') {
+            entity = appState.customers.find(c => c.id === id);
+            table = 'customers';
+        } else {
+            entity = appState.suppliers.find(s => s.id === id);
+            table = 'suppliers';
+        }
+
+        if (entity) {
+            let currentAmount = parseFloat(entity.amount || 0);
+            let currentType = entity.amount_type || 'none'; 
+            
+            let signedBalance = currentType === 'creditor' ? -currentAmount : currentAmount;
+
+            if (txType === 'PAYMENT_RECEIVED' || txType === 'ADD_CREDIT') {
+                signedBalance -= amount;
+            } else if (txType === 'PAYMENT_GIVEN' || txType === 'ADD_DEBIT') {
+                signedBalance += amount;
+            }
+
+            let newType = 'none';
+            if (signedBalance > 0.001) newType = 'debtor';
+            else if (signedBalance < -0.001) newType = 'creditor';
+            
+            let newAmount = Math.abs(signedBalance);
+
+            const { error: updateError } = await supabase.from(table).update({
+                amount: newAmount,
+                amount_type: newType
+            }).eq('id', id).eq('tenant_id', authState.owner.tenant_id);
+
+            if (updateError) throw updateError;
+            
+            // Update local state
+            entity.amount = newAmount;
+            entity.amount_type = newType;
+            
+            if (type === 'customer') renderCustomers();
+            else renderSuppliers();
+        }
+
+        closeModals();
+        showToast('Payment recorded successfully!');
+    } catch (err) {
+        console.error("Payment error:", err);
+        alert("Failed to record payment: " + err.message);
+    }
+});
 
 async function printPurchaseSlip(slipId) {
     try {

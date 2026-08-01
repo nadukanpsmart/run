@@ -169,3 +169,19 @@ CREATE POLICY "Enable ALL actions for users based on tenant_id" ON public.custom
 CREATE POLICY "Enable ALL actions for users based on tenant_id" ON public.suppliers FOR ALL TO authenticated USING (tenant_id IN (SELECT tenant_id FROM public.owners WHERE id = auth.uid())) WITH CHECK (tenant_id IN (SELECT tenant_id FROM public.owners WHERE id = auth.uid()));
 CREATE POLICY "Enable ALL actions for users based on tenant_id" ON public.purchase_slips FOR ALL TO authenticated USING (tenant_id IN (SELECT tenant_id FROM public.owners WHERE id = auth.uid())) WITH CHECK (tenant_id IN (SELECT tenant_id FROM public.owners WHERE id = auth.uid()));
 CREATE POLICY "Enable ALL actions for users based on tenant_id" ON public.purchase_slip_items FOR ALL TO authenticated USING (tenant_id IN (SELECT tenant_id FROM public.owners WHERE id = auth.uid())) WITH CHECK (tenant_id IN (SELECT tenant_id FROM public.owners WHERE id = auth.uid()));
+
+-- 11. Ledger Transactions (Payments, Credits, Debits)
+CREATE TABLE public.ledger_transactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL, -- 'customer' or 'supplier'
+    entity_id UUID NOT NULL,
+    transaction_type TEXT NOT NULL, -- 'PAYMENT_RECEIVED', 'PAYMENT_GIVEN', 'ADD_CREDIT', 'ADD_DEBIT'
+    amount NUMERIC DEFAULT 0,
+    transaction_date DATE,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.ledger_transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Enable ALL actions for users based on tenant_id" ON public.ledger_transactions FOR ALL TO authenticated USING (tenant_id IN (SELECT tenant_id FROM public.owners WHERE id = auth.uid())) WITH CHECK (tenant_id IN (SELECT tenant_id FROM public.owners WHERE id = auth.uid()));
