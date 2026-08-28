@@ -145,6 +145,7 @@ function switchView(viewId) {
     if (viewId === 'billing') renderBilling();
     if (viewId === 'dashboard') loadDashboard(appState.dashboardFilter);
     if (viewId === 'analysis') loadDashboard(appState.dashboardFilter);
+    if (viewId === 'purchases') initPurchases();
     if (viewId === 'sales') loadSales();
     if (viewId === 'purchase-history') renderPurchaseHistory();
     if (viewId === 'customers') renderCustomers();
@@ -631,6 +632,7 @@ async function loadInventory() {
 
     renderInventoryTabs();
     renderInventoryList();
+    if (typeof renderDashboardInventory === 'function') renderDashboardInventory();
 }
 
 function renderInventoryTabs() {
@@ -1224,7 +1226,7 @@ function renderCart() {
                 <div class="qty-controls">
                     <button class="special-price-btn ${isSpecial ? 'active' : ''}" onclick="editItemSpecialPrice(${index})" title="${isSpecial ? 'Special Price Active: ₹' + unitPrice + ' (Click to edit)' : 'Give Special Price'}">🏷️</button>
                     <button class="qty-btn" onclick="updateCartQty(${index}, -1)">-</button>
-                    <span>${item.qty}</span>
+                    <input type="number" class="qty-input" min="1" value="${item.qty}" oninput="handleCartQtyInput(${index}, this)" onchange="handleCartQtyChange(${index}, this)" onfocus="this.select()" onkeydown="if(event.key==='Enter')this.blur()">
                     <button class="qty-btn" onclick="updateCartQty(${index}, 1)">+</button>
                 </div>
                 <button class="remove-btn" onclick="removeFromCart(${index})">&times;</button>
@@ -1240,6 +1242,43 @@ function renderCart() {
     if (mobileCountEl) mobileCountEl.textContent = `(${totalQty})`;
 
     calculateTotals();
+}
+
+function handleCartQtyInput(index, input) {
+    const item = appState.cart[index];
+    if (!item) return;
+    const val = parseInt(input.value, 10);
+    if (isNaN(val) || val <= 0) {
+        return;
+    }
+    if (val > item.product.stock && !item.product.is_in_house) {
+        alert(`Cannot exceed available stock (${item.product.stock})`);
+        input.value = item.qty;
+        return;
+    }
+    item.qty = val;
+    calculateTotals();
+    const totalQty = appState.cart.reduce((sum, it) => sum + it.qty, 0);
+    const mobileCountEl = document.getElementById('mobile-cart-count');
+    if (mobileCountEl) mobileCountEl.textContent = `(${totalQty})`;
+}
+
+function handleCartQtyChange(index, input) {
+    const item = appState.cart[index];
+    if (!item) return;
+    const val = parseInt(input.value, 10);
+    if (isNaN(val) || val <= 0) {
+        item.qty = 1;
+        input.value = 1;
+    } else if (val > item.product.stock && !item.product.is_in_house) {
+        alert(`Cannot exceed available stock (${item.product.stock})`);
+        item.qty = Math.min(item.qty, item.product.stock);
+        input.value = item.qty;
+    } else {
+        item.qty = val;
+        input.value = val;
+    }
+    renderCart();
 }
 
 function updateCartQty(index, delta) {
@@ -1299,11 +1338,18 @@ async function generateBill() {
     if (discountType === 'percentage') final = subtotal - (subtotal * (discountValue / 100));
     if (final < 0) final = 0;
 
-    const paymentMode = document.querySelector('input[name="paymode"]:checked').value;
+    const paymentMode = document.querySelector('input[name="paymode"]:checked')?.value || 'CASH';
     const customerName = document.getElementById('customer-name').value.trim();
     
-    // Auto-expand customer details if empty and collapsed
+    // Auto-expand customer details if empty and collapsed, or require customer name for Credit (Khata)
     const customerDetailsAccordion = document.getElementById('customer-details-accordion');
+    if (paymentMode === 'CREDIT' && !customerName) {
+        alert("Customer Name is required for Credit (Khata) bills so debt can be tracked.");
+        if (customerDetailsAccordion) customerDetailsAccordion.open = true;
+        document.getElementById('customer-name').focus();
+        return;
+    }
+
     if (customerDetailsAccordion && !customerDetailsAccordion.open && !customerName) {
         customerDetailsAccordion.open = true;
         customerDetailsAccordion.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -1391,7 +1437,9 @@ async function generateBill() {
     const billId = billData.id;
 
     if (typeof checkAndAutoAddCustomer === 'function') {
-        checkAndAutoAddCustomer(customerName, customerPhone, customerGstin, customerAddress);
+        const creditAmt = paymentMode === 'CREDIT' ? final : 0;
+        const bDate = new Date().toISOString().split('T')[0];
+        checkAndAutoAddCustomer(customerName, customerPhone, customerGstin, customerAddress, creditAmt, billNumber, bDate);
     }
 
     const itemsToInsert = appState.cart.map(item => ({
@@ -2239,15 +2287,26 @@ async function loadDashboard(range) {
         const totalSales = safeBills.reduce((sum, b) => sum + b.final_amount, 0);
         const cash = safeBills.filter(b => b.payment_mode === 'CASH').reduce((sum, b) => sum + b.final_amount, 0);
         const upi = safeBills.filter(b => b.payment_mode === 'UPI').reduce((sum, b) => sum + b.final_amount, 0);
+        const card = safeBills.filter(b => b.payment_mode === 'CARD').reduce((sum, b) => sum + b.final_amount, 0);
+        const credit = safeBills.filter(b => b.payment_mode === 'CREDIT').reduce((sum, b) => sum + b.final_amount, 0);
         const other = safeBills.filter(b => b.payment_mode === 'OTHER').reduce((sum, b) => sum + b.final_amount, 0);
         const count = safeBills.length;
 
         // Update UI
-        document.getElementById('stat-total-sales').textContent = `₹${totalSales.toFixed(2)}`;
-        document.getElementById('stat-cash').textContent = `₹${cash.toFixed(2)}`;
-        document.getElementById('stat-upi').textContent = `₹${upi.toFixed(2)}`;
-        document.getElementById('stat-other').textContent = `₹${other.toFixed(2)}`;
-        document.getElementById('stat-bill-count').textContent = count;
+        const elTotal = document.getElementById('stat-total-sales');
+        if (elTotal) elTotal.textContent = `₹${totalSales.toFixed(2)}`;
+        const elCash = document.getElementById('stat-cash');
+        if (elCash) elCash.textContent = `₹${cash.toFixed(2)}`;
+        const elUpi = document.getElementById('stat-upi');
+        if (elUpi) elUpi.textContent = `₹${upi.toFixed(2)}`;
+        const elCard = document.getElementById('stat-card');
+        if (elCard) elCard.textContent = `₹${card.toFixed(2)}`;
+        const elCredit = document.getElementById('stat-credit');
+        if (elCredit) elCredit.textContent = `₹${credit.toFixed(2)}`;
+        const elOther = document.getElementById('stat-other');
+        if (elOther) elOther.textContent = `₹${other.toFixed(2)}`;
+        const elCount = document.getElementById('stat-bill-count');
+        if (elCount) elCount.textContent = count;
         
         // Update payables/receivables
         if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
@@ -2303,6 +2362,11 @@ async function loadDashboard(range) {
                 renderCharts(safeBills, range, startTime, validItems);
             }
         }
+
+        // Load & render Inventory details subsection
+        if (typeof loadDashboardInventory === 'function') {
+            loadDashboardInventory();
+        }
     } catch (err) {
         console.error('DASHBOARD ERROR:', err);
         // alert('Dashboard Error: ' + err.message); // Uncomment if needed for user visibility
@@ -2350,6 +2414,142 @@ function renderTopProducts(items) {
     });
 }
 
+// DASHBOARD INVENTORY SUBSECTION
+// ==========================================
+let dashboardInventoryPurchaseDates = null;
+
+async function loadDashboardInventory() {
+    const tbody = document.getElementById('dashboard-inventory-tbody');
+    if (!tbody) return;
+
+    if (!appState.products || appState.products.length === 0) {
+        if (typeof loadInventory === 'function') {
+            await loadInventory();
+        }
+    }
+
+    try {
+        if (supabase && window.authState && window.authState.owner) {
+            const { data, error } = await supabase
+                .from('purchase_slip_items')
+                .select('product_name, upc, created_at, purchase_slips(invoice_date, entry_date, created_at)')
+                .eq('tenant_id', authState.owner.tenant_id)
+                .order('created_at', { ascending: false });
+
+            if (!error && data) {
+                const map = {};
+                data.forEach(item => {
+                    const slipDate = item.purchase_slips?.invoice_date || item.purchase_slips?.entry_date || item.created_at;
+                    if (item.upc && !map[`upc_${item.upc.trim()}`]) {
+                        map[`upc_${item.upc.trim()}`] = slipDate;
+                    }
+                    if (item.product_name) {
+                        const nameKey = `name_${item.product_name.toLowerCase().trim()}`;
+                        if (!map[nameKey]) {
+                            map[nameKey] = slipDate;
+                        }
+                    }
+                });
+                dashboardInventoryPurchaseDates = map;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not fetch purchase dates for dashboard inventory:", e);
+    }
+
+    renderDashboardInventory();
+}
+
+function renderDashboardInventory() {
+    const tbody = document.getElementById('dashboard-inventory-tbody');
+    const countEl = document.getElementById('dashboard-inventory-count');
+    if (!tbody) return;
+
+    const searchInput = document.getElementById('dashboard-inventory-search');
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    const products = appState.products || [];
+    let filtered = products;
+
+    if (query) {
+        filtered = products.filter(p => 
+            (p.name && p.name.toLowerCase().includes(query)) ||
+            (p.upc && p.upc.toLowerCase().includes(query))
+        );
+    }
+
+    if (countEl) {
+        countEl.textContent = `Showing ${filtered.length} of ${products.length} products`;
+    }
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    ${query ? 'No products match your search.' : 'No products in inventory.'}
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const purchaseMap = dashboardInventoryPurchaseDates || {};
+
+    let html = '';
+    filtered.forEach(p => {
+        const tabName = (appState.tabs || []).find(t => t.id === p.tab_id)?.name;
+        const upcDisplay = p.upc ? `<span style="font-family: monospace; font-size: 0.85rem; background: var(--bg-app); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color);">${p.upc}</span>` : `<span style="color: var(--text-secondary);">-</span>`;
+        
+        let stockDisplay = '';
+        if (p.is_in_house) {
+            stockDisplay = `<span style="background: #ECFDF5; color: #059669; padding: 3px 8px; border-radius: 12px; font-weight: 600; font-size: 0.8rem;">Unlimited</span>`;
+        } else if (p.stock <= 0) {
+            stockDisplay = `<span style="color: var(--danger-color); font-weight: 700;">0 <small style="font-size: 0.75rem;">(Out of stock)</small></span>`;
+        } else if (p.stock <= 5) {
+            stockDisplay = `<span style="color: #D97706; font-weight: 600;">${p.stock} <small style="font-size: 0.75rem;">(Low)</small></span>`;
+        } else {
+            stockDisplay = `<span style="font-weight: 600;">${p.stock}</span>`;
+        }
+
+        // Determine date of purchase (latest updated) or fallback to product created date
+        let dateDisplay = '-';
+        const purchaseDate = (p.upc && purchaseMap[`upc_${p.upc.trim()}`]) || (p.name && purchaseMap[`name_${p.name.toLowerCase().trim()}`]);
+
+        if (purchaseDate) {
+            const formatted = new Date(purchaseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            dateDisplay = `<span style="color: var(--primary-color); font-weight: 500;">${formatted}</span> <small style="font-size: 0.75rem; color: var(--text-secondary);">(Purchase)</small>`;
+        } else if (p.created_at) {
+            const formatted = new Date(p.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            dateDisplay = `<span style="color: var(--text-secondary);">${formatted}</span> <small style="font-size: 0.75rem; color: var(--text-secondary);">(Added)</small>`;
+        }
+
+        let imgTag = '';
+        if (p.image_data) {
+            imgTag = `<img src="${p.image_data}" alt="" style="width: 32px; height: 32px; object-fit: cover; border-radius: 4px; margin-right: 8px; flex-shrink: 0;">`;
+        }
+
+        html += `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 10px 12px;">
+                    <div style="display: flex; align-items: center;">
+                        ${imgTag}
+                        <div>
+                            <div style="font-weight: 600; color: var(--text-primary);">${p.name}</div>
+                            ${tabName ? `<span style="font-size: 0.75rem; color: var(--text-secondary);">${tabName}</span>` : ''}
+                        </div>
+                    </div>
+                </td>
+                <td style="padding: 10px 12px;">${upcDisplay}</td>
+                <td style="padding: 10px 12px; text-align: center;">${stockDisplay}</td>
+                <td style="padding: 10px 12px; text-align: right; font-weight: 600;">₹${parseFloat(p.price || 0).toFixed(2)}</td>
+                <td style="padding: 10px 12px;">${dateDisplay}</td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
 function renderCharts(bills, range, startTime, items) {
     if (!window.Chart) return;
 
@@ -2357,6 +2557,8 @@ function renderCharts(bills, range, startTime, items) {
     const payData = {
         CASH: bills.filter(b => b.payment_mode === 'CASH').reduce((sum, b) => sum + b.final_amount, 0),
         UPI: bills.filter(b => b.payment_mode === 'UPI').reduce((sum, b) => sum + b.final_amount, 0),
+        CARD: bills.filter(b => b.payment_mode === 'CARD').reduce((sum, b) => sum + b.final_amount, 0),
+        CREDIT: bills.filter(b => b.payment_mode === 'CREDIT').reduce((sum, b) => sum + b.final_amount, 0),
         OTHER: bills.filter(b => b.payment_mode === 'OTHER').reduce((sum, b) => sum + b.final_amount, 0),
     };
 
@@ -2366,10 +2568,10 @@ function renderCharts(bills, range, startTime, items) {
     appState.charts.payment = new Chart(ctxPay, {
         type: 'doughnut',
         data: {
-            labels: ['Cash', 'UPI', 'Other'],
+            labels: ['Cash', 'UPI', 'Card', 'Credit (Khata)', 'Other'],
             datasets: [{
-                data: [payData.CASH, payData.UPI, payData.OTHER],
-                backgroundColor: ['#10B981', '#2563EB', '#6B7280'],
+                data: [payData.CASH, payData.UPI, payData.CARD, payData.CREDIT, payData.OTHER],
+                backgroundColor: ['#10B981', '#2563EB', '#F59E0B', '#8B5CF6', '#6B7280'],
                 borderWidth: 0
             }]
         },
@@ -4570,6 +4772,19 @@ document.getElementById('undo-bill-form').addEventListener('submit', async (e) =
     const notes = document.getElementById('undo-bill-notes').value;
     
     if(!billId || !notes) return;
+
+    // Fetch bill details first to check payment mode and customer
+    let undoneBill = null;
+    try {
+        const { data: bData } = await supabase
+            .from('bills')
+            .select('payment_mode, final_amount, customer_name, customer_phone, bill_number')
+            .eq('id', billId)
+            .single();
+        undoneBill = bData;
+    } catch(err) {
+        console.warn("Could not pre-fetch bill details before undo:", err);
+    }
     
     // 1. Update the bill record
     const { error: billError } = await supabase
@@ -4594,9 +4809,6 @@ document.getElementById('undo-bill-form').addEventListener('submit', async (e) =
         // 3. Revert Stock for non-in-house products
         for (const item of items) {
             if (item.product_id && item.products && !item.products.is_in_house) {
-                // We need to fetch current stock and add quantity
-                // Since this is client-side without RPC, we do it in two steps or just let the user know
-                // A better approach in Supabase is RPC, but we'll do read-modify-write here.
                 const { data: prod } = await supabase
                     .from('products')
                     .select('stock')
@@ -4612,6 +4824,49 @@ document.getElementById('undo-bill-form').addEventListener('submit', async (e) =
             }
         }
     }
+
+    // 4. Revert Customer Debt if bill was on Credit (Khata)
+    if (undoneBill && undoneBill.payment_mode === 'CREDIT' && undoneBill.customer_name) {
+        try {
+            const customer = (appState.customers || []).find(c => 
+                (undoneBill.customer_phone && c.phone === undoneBill.customer_phone) ||
+                (c.name.toLowerCase() === undoneBill.customer_name.toLowerCase())
+            );
+            if (customer) {
+                let currentAmount = parseFloat(customer.amount || 0);
+                let currentType = customer.amount_type || 'none';
+                let signedBalance = currentType === 'creditor' ? -currentAmount : currentAmount;
+                signedBalance -= parseFloat(undoneBill.final_amount || 0);
+                
+                let newType = 'none';
+                if (signedBalance > 0.001) newType = 'debtor';
+                else if (signedBalance < -0.001) newType = 'creditor';
+                let newAmount = Math.abs(signedBalance);
+
+                await supabase.from('ledger_transactions').insert([{
+                    tenant_id: authState.owner.tenant_id,
+                    entity_type: 'customer',
+                    entity_id: customer.id,
+                    transaction_type: 'PAYMENT_RECEIVED',
+                    amount: parseFloat(undoneBill.final_amount || 0),
+                    transaction_date: new Date().toISOString().split('T')[0],
+                    notes: `Undone Credit Bill #${undoneBill.bill_number || ''}`
+                }]);
+
+                await supabase.from('customers').update({
+                    amount: newAmount,
+                    amount_type: newType
+                }).eq('id', customer.id).eq('tenant_id', authState.owner.tenant_id);
+
+                customer.amount = newAmount;
+                customer.amount_type = newType;
+                if (typeof renderCustomers === 'function') renderCustomers();
+                if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+            }
+        } catch (err) {
+            console.warn("Could not revert customer debt for undone bill:", err);
+        }
+    }
     
     showToast('Bill successfully undone!');
     closeModals();
@@ -4619,6 +4874,7 @@ document.getElementById('undo-bill-form').addEventListener('submit', async (e) =
     // Refresh views
     if (typeof loadSales === 'function') loadSales();
     if (typeof loadInventory === 'function') loadInventory();
+    if (typeof loadCustomers === 'function') loadCustomers();
     if (typeof loadDashboard === 'function') loadDashboard('today');
 });
 
@@ -5134,21 +5390,93 @@ function selectCustomerSuggestion(cStr) {
     } catch(e) {}
 }
 
-async function checkAndAutoAddCustomer(name, phone, gstin, address) {
-    if (!name) return;
-    // Check if exists
-    const exists = appState.customers.find(c => 
+async function addCustomerCreditBill(customer, amount, billNumber, billDate) {
+    if (!customer || !amount || amount <= 0) return;
+    try {
+        let currentAmount = parseFloat(customer.amount || 0);
+        let currentType = customer.amount_type || 'none';
+        let signedBalance = currentType === 'creditor' ? -currentAmount : currentAmount;
+        
+        // Adding debt/debit for customer credit purchase
+        signedBalance += parseFloat(amount);
+        
+        let newType = 'none';
+        if (signedBalance > 0.001) newType = 'debtor';
+        else if (signedBalance < -0.001) newType = 'creditor';
+        let newAmount = Math.abs(signedBalance);
+
+        // Record in ledger_transactions
+        await supabase.from('ledger_transactions').insert([{
+            tenant_id: authState.owner.tenant_id,
+            entity_type: 'customer',
+            entity_id: customer.id,
+            transaction_type: 'ADD_DEBIT',
+            amount: parseFloat(amount),
+            transaction_date: billDate || new Date().toISOString().split('T')[0],
+            notes: `Credit Bill #${billNumber || ''}`
+        }]);
+
+        // Update customer balance in DB
+        await supabase.from('customers').update({
+            amount: newAmount,
+            amount_type: newType
+        }).eq('id', customer.id).eq('tenant_id', authState.owner.tenant_id);
+
+        customer.amount = newAmount;
+        customer.amount_type = newType;
+        if (typeof renderCustomers === 'function') renderCustomers();
+        if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+    } catch (err) {
+        console.error("Error adding customer debt for credit bill:", err);
+    }
+}
+
+async function checkAndAutoAddCustomer(name, phone, gstin, address, creditAmount = 0, billNumber = '', billDate = '') {
+    if (!name) return null;
+    let customer = appState.customers.find(c => 
         (phone && c.phone === phone) || 
         (!phone && c.name.toLowerCase() === name.toLowerCase())
     );
-    if (!exists) {
+
+    if (!customer) {
+        let initialAmount = 0;
+        let initialType = null;
+        if (creditAmount > 0) {
+            initialAmount = parseFloat(creditAmount);
+            initialType = 'debtor';
+        }
+
         const payload = {
             tenant_id: authState.owner.tenant_id,
-            name, phone, gstin, address
+            name, phone, gstin, address,
+            amount: initialAmount,
+            amount_type: initialType
         };
-        const { error } = await supabase.from('customers').insert([payload]);
-        if (!error) loadCustomers();
+        const { data, error } = await supabase.from('customers').insert([payload]).select().single();
+        if (!error && data) {
+            appState.customers.push(data);
+            customer = data;
+            if (creditAmount > 0) {
+                // Record transaction in ledger
+                await supabase.from('ledger_transactions').insert([{
+                    tenant_id: authState.owner.tenant_id,
+                    entity_type: 'customer',
+                    entity_id: data.id,
+                    transaction_type: 'ADD_DEBIT',
+                    amount: parseFloat(creditAmount),
+                    transaction_date: billDate || new Date().toISOString().split('T')[0],
+                    notes: `Credit Bill #${billNumber || ''}`
+                }]);
+            }
+            if (typeof renderCustomers === 'function') renderCustomers();
+            if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+        }
+    } else {
+        if (creditAmount > 0) {
+            await addCustomerCreditBill(customer, creditAmount, billNumber, billDate);
+        }
     }
+    return customer;
 }
 
 async function migrateExistingCustomers() {
@@ -5250,18 +5578,20 @@ async function renderPurchaseHistory() {
         const dateTo = document.getElementById('purchase-history-date-to')?.value;
         const supplierSearch = document.getElementById('purchase-history-supplier')?.value.toLowerCase();
         const invoiceSearch = document.getElementById('purchase-history-invoice')?.value.toLowerCase();
+        const payMode = document.getElementById('purchase-history-payment')?.value || 'all';
 
         if (dateFrom) query = query.gte('entry_date', dateFrom);
         if (dateTo) query = query.lte('entry_date', dateTo);
         if (invoiceSearch) query = query.ilike('invoice_number', `%${invoiceSearch}%`);
         if (supplierSearch) query = query.ilike('supplier_name', `%${supplierSearch}%`);
+        if (payMode !== 'all') query = query.eq('payment_mode', payMode);
 
         const { data, error } = await query.order('entry_date', { ascending: false });
 
         if (error) throw error;
 
         if (!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No purchases found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No purchases found.</td></tr>';
             return;
         }
 
@@ -5271,16 +5601,25 @@ async function renderPurchaseHistory() {
             const invDate = slip.invoice_date ? new Date(slip.invoice_date).toLocaleDateString() : '-';
             const itemCount = slip.purchase_slip_items ? slip.purchase_slip_items.length : 0;
             
+            let modeDisplay = 'Cash';
+            if (slip.payment_mode === 'CREDIT') modeDisplay = '<span style="color:var(--danger-color); font-weight:600;">Credit (Khata)</span>';
+            else if (slip.payment_mode === 'UPI') modeDisplay = 'UPI';
+            else if (slip.payment_mode === 'CARD') modeDisplay = 'Card';
+            else if (slip.payment_mode === 'OTHER') modeDisplay = 'Other';
+            else if (slip.payment_mode) modeDisplay = slip.payment_mode;
+
             html += `
                 <tr style="border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="printPurchaseSlip('${slip.id}')" title="Click to Print">
                     <td>${slip.invoice_number || '-'}</td>
                     <td>${entryDate}</td>
                     <td>${invDate}</td>
                     <td>${slip.supplier_name || '-'}</td>
+                    <td>${modeDisplay}</td>
                     <td>${itemCount}</td>
                     <td style="font-weight:bold;">₹${parseFloat(slip.total_amount).toFixed(2)}</td>
                     <td>
                         <button class="action-btn small" onclick="event.stopPropagation(); printPurchaseSlip('${slip.id}')">Print</button>
+                        <button class="action-btn small" onclick="event.stopPropagation(); openEditPurchaseModal('${slip.id}')" style="margin-left: 0.5rem;">Edit</button>
                         <button class="action-btn small danger" onclick="event.stopPropagation(); deletePurchaseSlip('${slip.id}')" style="margin-left: 0.5rem;">Delete</button>
                     </td>
                 </tr>
@@ -5290,15 +5629,68 @@ async function renderPurchaseHistory() {
 
     } catch (err) {
         console.error("Error loading purchase history:", err);
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">Error loading history</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:red;">Error loading history</td></tr>`;
     }
 }
 
 async function deletePurchaseSlip(slipId) {
     if (!confirm('Are you sure you want to delete this purchase receipt? This action cannot be undone.')) return;
     try {
+        // Fetch slip info before deleting to check if it was on credit
+        const { data: slip } = await supabase
+            .from('purchase_slips')
+            .select('payment_mode, total_amount, supplier_name, supplier_phone, invoice_number')
+            .eq('id', slipId)
+            .single();
+
         const { error } = await supabase.from('purchase_slips').delete().eq('id', slipId);
         if (error) throw error;
+
+        // If it was on credit, revert supplier credit amount
+        if (slip && slip.payment_mode === 'CREDIT' && slip.supplier_name) {
+            try {
+                const supplier = (appState.suppliers || []).find(s => 
+                    (slip.supplier_phone && s.phone === slip.supplier_phone) ||
+                    (s.name.toLowerCase() === slip.supplier_name.toLowerCase())
+                );
+                if (supplier) {
+                    let currentAmount = parseFloat(supplier.amount || 0);
+                    let currentType = supplier.amount_type || 'none';
+                    let signedBalance = currentType === 'creditor' ? -currentAmount : currentAmount;
+                    
+                    // Reverting credit purchase
+                    signedBalance += parseFloat(slip.total_amount || 0);
+
+                    let newType = 'none';
+                    if (signedBalance > 0.001) newType = 'debtor';
+                    else if (signedBalance < -0.001) newType = 'creditor';
+                    let newAmount = Math.abs(signedBalance);
+
+                    await supabase.from('ledger_transactions').insert([{
+                        tenant_id: authState.owner.tenant_id,
+                        entity_type: 'supplier',
+                        entity_id: supplier.id,
+                        transaction_type: 'PAYMENT_GIVEN',
+                        amount: parseFloat(slip.total_amount || 0),
+                        transaction_date: new Date().toISOString().split('T')[0],
+                        notes: `Deleted Credit Slip #${slip.invoice_number || ''}`
+                    }]);
+
+                    await supabase.from('suppliers').update({
+                        amount: newAmount,
+                        amount_type: newType
+                    }).eq('id', supplier.id).eq('tenant_id', authState.owner.tenant_id);
+
+                    supplier.amount = newAmount;
+                    supplier.amount_type = newType;
+                    if (typeof renderSuppliers === 'function') renderSuppliers();
+                    if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+                }
+            } catch(revErr) {
+                console.warn("Could not revert supplier debt on deleted slip:", revErr);
+            }
+        }
+
         showToast('Purchase receipt deleted successfully');
         renderPurchaseHistory();
     } catch (err) {
@@ -5307,13 +5699,511 @@ async function deletePurchaseSlip(slipId) {
     }
 }
 
+// ==========================================
+// EDIT PURCHASE SLIP LOGIC
+// ==========================================
+let editPurchaseState = {
+    slipId: null,
+    oldSlip: null,
+    oldItems: [],
+    items: []
+};
+
+let editPurchaseAutocompleteInit = false;
+function initEditPurchaseAutocomplete() {
+    if (editPurchaseAutocompleteInit) return;
+    editPurchaseAutocompleteInit = true;
+
+    const upcInput = document.getElementById('edit-purchase-new-upc');
+    const upcSuggestions = document.getElementById('edit-purchase-upc-suggestions');
+    const nameInput = document.getElementById('edit-purchase-new-name');
+    const nameSuggestions = document.getElementById('edit-purchase-name-suggestions');
+
+    if (upcInput && upcSuggestions) {
+        upcInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            upcSuggestions.innerHTML = '';
+            if (!query) { upcSuggestions.classList.add('hidden'); return; }
+            const matches = (appState.products || []).filter(p => 
+                (p.upc && p.upc.toLowerCase().includes(query)) ||
+                (p.name && p.name.toLowerCase().includes(query))
+            ).slice(0, 6);
+            if (matches.length > 0) {
+                matches.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerHTML = `<strong>${p.name}</strong><br><small style="color:var(--text-secondary);">UPC: ${p.upc || 'N/A'} • Selling: ₹${p.price}</small>`;
+                    div.onclick = () => {
+                        upcInput.value = p.upc || '';
+                        nameInput.value = p.name || '';
+                        document.getElementById('edit-purchase-new-selling-price').value = p.price || 0;
+                        upcSuggestions.classList.add('hidden');
+                    };
+                    upcSuggestions.appendChild(div);
+                });
+                upcSuggestions.classList.remove('hidden');
+            } else {
+                upcSuggestions.classList.add('hidden');
+            }
+        });
+    }
+
+    if (nameInput && nameSuggestions) {
+        nameInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            nameSuggestions.innerHTML = '';
+            if (!query) { nameSuggestions.classList.add('hidden'); return; }
+            const matches = (appState.products || []).filter(p => 
+                p.name.toLowerCase().includes(query) ||
+                (p.upc && p.upc.toLowerCase().includes(query))
+            ).slice(0, 6);
+            if (matches.length > 0) {
+                matches.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerHTML = `<strong>${p.name}</strong><br><small style="color:var(--text-secondary);">UPC: ${p.upc || 'N/A'} • Selling: ₹${p.price}</small>`;
+                    div.onclick = () => {
+                        nameInput.value = p.name || '';
+                        upcInput.value = p.upc || '';
+                        document.getElementById('edit-purchase-new-selling-price').value = p.price || 0;
+                        nameSuggestions.classList.add('hidden');
+                    };
+                    nameSuggestions.appendChild(div);
+                });
+                nameSuggestions.classList.remove('hidden');
+            } else {
+                nameSuggestions.classList.add('hidden');
+            }
+        });
+    }
+}
+
+async function openEditPurchaseModal(slipId) {
+    if (!supabase) return;
+    try {
+        if (!appState.products || appState.products.length === 0) {
+            const { data: prods } = await supabase.from('products').select('*').order('name');
+            if (prods) appState.products = prods;
+        }
+
+        const { data: slip, error: slipError } = await supabase
+            .from('purchase_slips')
+            .select('*')
+            .eq('id', slipId)
+            .single();
+
+        if (slipError || !slip) throw slipError;
+
+        const { data: items, error: itemsError } = await supabase
+            .from('purchase_slip_items')
+            .select('*')
+            .eq('purchase_slip_id', slipId);
+
+        if (itemsError || !items) throw itemsError;
+
+        editPurchaseState.slipId = slip.id;
+        editPurchaseState.oldSlip = JSON.parse(JSON.stringify(slip));
+        editPurchaseState.oldItems = JSON.parse(JSON.stringify(items));
+        editPurchaseState.items = items.map(item => ({
+            id: item.id || ('item_' + Math.random()),
+            upc: item.upc || '',
+            product_name: item.product_name || '',
+            bought_qty: Number(item.bought_qty) || 0,
+            free_qty: Number(item.free_qty) || 0,
+            total_qty: (Number(item.bought_qty) || 0) + (Number(item.free_qty) || 0),
+            expiry_date: item.expiry_date || '',
+            bought_price: Number(item.bought_price) || 0,
+            selling_price: Number(item.selling_price) || 0,
+            discount: Number(item.discount) || 0,
+            amount: Number(item.amount) || 0
+        }));
+
+        document.getElementById('edit-purchase-id').value = slip.id;
+        document.getElementById('edit-purchase-invoice-title').textContent = '#' + (slip.invoice_number || slip.id.slice(0, 8));
+        document.getElementById('edit-purchase-supplier-name').value = slip.supplier_name || '';
+        document.getElementById('edit-purchase-supplier-phone').value = slip.supplier_phone || '';
+        document.getElementById('edit-purchase-supplier-gstin').value = slip.supplier_gstin || '';
+        document.getElementById('edit-purchase-supplier-address').value = slip.supplier_address || '';
+        document.getElementById('edit-purchase-invoice-number').value = slip.invoice_number || '';
+        document.getElementById('edit-purchase-invoice-date').value = slip.invoice_date || '';
+        document.getElementById('edit-purchase-entry-date').value = slip.entry_date || '';
+
+        const paymodeRadios = document.getElementsByName('edit-purchase-paymode');
+        paymodeRadios.forEach(r => {
+            r.checked = (r.value === (slip.payment_mode || 'CASH'));
+        });
+
+        // Reset new item inputs
+        document.getElementById('edit-purchase-new-name').value = '';
+        document.getElementById('edit-purchase-new-upc').value = '';
+        document.getElementById('edit-purchase-new-bought-qty').value = '1';
+        document.getElementById('edit-purchase-new-free-qty').value = '0';
+        document.getElementById('edit-purchase-new-bought-price').value = '0';
+        document.getElementById('edit-purchase-new-selling-price').value = '0';
+        document.getElementById('edit-purchase-new-discount').value = '0';
+
+        initEditPurchaseAutocomplete();
+        renderEditPurchaseItems();
+        updateEditPurchaseTotals();
+
+        document.getElementById('modal-overlay').classList.remove('hidden');
+        document.getElementById('modal-edit-purchase').classList.remove('hidden');
+
+    } catch (err) {
+        console.error('Error opening edit purchase modal:', err);
+        alert('Failed to load purchase slip details for editing: ' + err.message);
+    }
+}
+
+function renderEditPurchaseItems() {
+    const tbody = document.getElementById('edit-purchase-items-body');
+    if (!tbody) return;
+
+    if (!editPurchaseState.items || editPurchaseState.items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:16px; color:var(--text-secondary);">No items in this slip. Add an item below.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    editPurchaseState.items.forEach((item, index) => {
+        const lineTotal = item.amount.toFixed(2);
+        html += `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 6px 8px;">${index + 1}</td>
+                <td style="padding: 6px 8px; font-weight: 600;">
+                    <div>${item.product_name}</div>
+                    <small style="color:var(--text-secondary); font-size:0.75rem;">${item.upc ? 'UPC: ' + item.upc : 'No UPC'}</small>
+                </td>
+                <td style="padding: 6px 8px;">
+                    <input type="number" min="0" value="${item.bought_qty}" style="width:65px; padding:3px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem;" oninput="editPurchaseUpdateItemField(${index}, 'bought_qty', this.value)">
+                </td>
+                <td style="padding: 6px 8px;">
+                    <input type="number" min="0" value="${item.free_qty}" style="width:55px; padding:3px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem;" oninput="editPurchaseUpdateItemField(${index}, 'free_qty', this.value)">
+                </td>
+                <td style="padding: 6px 8px; font-weight:600;" id="edit-purchase-totalqty-${index}">${item.total_qty}</td>
+                <td style="padding: 6px 8px;">
+                    <input type="number" min="0" step="0.01" value="${item.bought_price}" style="width:75px; padding:3px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem;" oninput="editPurchaseUpdateItemField(${index}, 'bought_price', this.value)">
+                </td>
+                <td style="padding: 6px 8px;">
+                    <input type="number" min="0" step="0.01" value="${item.selling_price}" style="width:75px; padding:3px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem;" oninput="editPurchaseUpdateItemField(${index}, 'selling_price', this.value)">
+                </td>
+                <td style="padding: 6px 8px;">
+                    <input type="number" min="0" step="0.01" value="${item.discount}" style="width:60px; padding:3px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem;" oninput="editPurchaseUpdateItemField(${index}, 'discount', this.value)">
+                </td>
+                <td style="padding: 6px 8px; text-align:right; font-weight:700; color:var(--primary-color);" id="edit-purchase-amount-${index}">₹${lineTotal}</td>
+                <td style="padding: 6px 8px; text-align:center;">
+                    <button type="button" class="action-btn small danger" onclick="editPurchaseRemoveItem(${index})" style="padding:3px 6px;">✕</button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+}
+
+function editPurchaseUpdateItemField(index, field, val) {
+    if (!editPurchaseState.items[index]) return;
+    const num = parseFloat(val) || 0;
+    editPurchaseState.items[index][field] = num;
+    
+    const item = editPurchaseState.items[index];
+    item.total_qty = (parseInt(item.bought_qty, 10) || 0) + (parseInt(item.free_qty, 10) || 0);
+    let amt = (item.bought_qty * item.bought_price) - (item.discount || 0);
+    if (amt < 0) amt = 0;
+    item.amount = amt;
+
+    const tQtyEl = document.getElementById(`edit-purchase-totalqty-${index}`);
+    if (tQtyEl) tQtyEl.textContent = item.total_qty;
+    const amtEl = document.getElementById(`edit-purchase-amount-${index}`);
+    if (amtEl) amtEl.textContent = `₹${amt.toFixed(2)}`;
+
+    updateEditPurchaseTotals();
+}
+
+function editPurchaseRemoveItem(index) {
+    editPurchaseState.items.splice(index, 1);
+    renderEditPurchaseItems();
+    updateEditPurchaseTotals();
+}
+
+function editPurchaseAddNewItem() {
+    const name = (document.getElementById('edit-purchase-new-name').value || '').trim();
+    const upc = (document.getElementById('edit-purchase-new-upc').value || '').trim();
+    const boughtQty = parseInt(document.getElementById('edit-purchase-new-bought-qty').value, 10) || 0;
+    const freeQty = parseInt(document.getElementById('edit-purchase-new-free-qty').value, 10) || 0;
+    const boughtPrice = parseFloat(document.getElementById('edit-purchase-new-bought-price').value) || 0;
+    const sellingPrice = parseFloat(document.getElementById('edit-purchase-new-selling-price').value) || 0;
+    const discount = parseFloat(document.getElementById('edit-purchase-new-discount').value) || 0;
+
+    if (!name) {
+        alert('Product name is required.');
+        return;
+    }
+    if (boughtQty <= 0 && freeQty <= 0) {
+        alert('Quantity must be greater than 0.');
+        return;
+    }
+
+    const totalQty = boughtQty + freeQty;
+    let amount = (boughtQty * boughtPrice) - discount;
+    if (amount < 0) amount = 0;
+
+    editPurchaseState.items.push({
+        id: 'new_item_' + Date.now(),
+        upc,
+        product_name: name,
+        bought_qty: boughtQty,
+        free_qty: freeQty,
+        total_qty: totalQty,
+        expiry_date: null,
+        bought_price: boughtPrice,
+        selling_price: sellingPrice,
+        discount,
+        amount
+    });
+
+    // Reset inputs
+    document.getElementById('edit-purchase-new-name').value = '';
+    document.getElementById('edit-purchase-new-upc').value = '';
+    document.getElementById('edit-purchase-new-bought-qty').value = '1';
+    document.getElementById('edit-purchase-new-free-qty').value = '0';
+    document.getElementById('edit-purchase-new-bought-price').value = '0';
+    document.getElementById('edit-purchase-new-selling-price').value = '0';
+    document.getElementById('edit-purchase-new-discount').value = '0';
+
+    renderEditPurchaseItems();
+    updateEditPurchaseTotals();
+}
+
+function updateEditPurchaseTotals() {
+    let totalItems = 0;
+    let totalAmount = 0;
+    if (editPurchaseState.items) {
+        editPurchaseState.items.forEach(i => {
+            totalItems += (i.total_qty || 0);
+            totalAmount += (i.amount || 0);
+        });
+    }
+    const countEl = document.getElementById('edit-purchase-items-count');
+    const amtEl = document.getElementById('edit-purchase-total-display');
+    if (countEl) countEl.textContent = totalItems;
+    if (amtEl) amtEl.textContent = `₹${totalAmount.toFixed(2)}`;
+}
+
+document.getElementById('edit-purchase-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const slipId = document.getElementById('edit-purchase-id').value;
+    if (!slipId) return;
+
+    if (!editPurchaseState.items || editPurchaseState.items.length === 0) {
+        alert('A purchase slip must contain at least 1 item.');
+        return;
+    }
+
+    const supplierName = document.getElementById('edit-purchase-supplier-name').value.trim();
+    if (!supplierName) {
+        alert('Supplier Name is required.');
+        return;
+    }
+
+    const supplierPhone = document.getElementById('edit-purchase-supplier-phone').value.trim();
+    const supplierGstin = (document.getElementById('edit-purchase-supplier-gstin')?.value || '').trim().toUpperCase();
+    const supplierAddress = (document.getElementById('edit-purchase-supplier-address')?.value || '').trim();
+    const invoiceNumber = document.getElementById('edit-purchase-invoice-number').value.trim();
+    const invoiceDate = document.getElementById('edit-purchase-invoice-date').value || null;
+    const entryDate = document.getElementById('edit-purchase-entry-date').value;
+    const paymentMode = document.querySelector('input[name="edit-purchase-paymode"]:checked')?.value || 'CASH';
+
+    if (!entryDate) {
+        alert('Entry Date is required.');
+        return;
+    }
+
+    const saveBtn = document.getElementById('btn-save-edit-purchase');
+    const originalText = saveBtn ? saveBtn.textContent : 'Save Changes';
+    if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
+
+    try {
+        const oldSlip = editPurchaseState.oldSlip;
+        const oldItems = editPurchaseState.oldItems;
+
+        // -------------------------------------------------------------
+        // STEP 1: REVERT OLD IMPACTS (UNDO OLD STOCK & OLD SUPPLIER DEBT)
+        // -------------------------------------------------------------
+        // A. Revert stock for all old items
+        for (const oldItem of (oldItems || [])) {
+            const oldQty = Number(oldItem.total_qty) || (Number(oldItem.bought_qty) || 0) + (Number(oldItem.free_qty) || 0);
+            if (oldQty > 0) {
+                let prod = null;
+                if (oldItem.upc) prod = (appState.products || []).find(p => p.upc === oldItem.upc);
+                if (!prod && oldItem.product_name) prod = (appState.products || []).find(p => p.name.toLowerCase() === oldItem.product_name.toLowerCase());
+                
+                if (prod && !prod.is_in_house) {
+                    const revertedStock = Math.max(0, (prod.stock || 0) - oldQty);
+                    await supabase.from('products').update({ stock: revertedStock }).eq('id', prod.id);
+                    prod.stock = revertedStock;
+                }
+            }
+        }
+
+        // B. Revert old supplier debt if old slip was on CREDIT
+        if (oldSlip && oldSlip.payment_mode === 'CREDIT' && oldSlip.supplier_name) {
+            const oldSupplier = (appState.suppliers || []).find(s => 
+                (oldSlip.supplier_phone && s.phone === oldSlip.supplier_phone) ||
+                (s.name.toLowerCase() === oldSlip.supplier_name.toLowerCase())
+            );
+            if (oldSupplier) {
+                let currentAmount = parseFloat(oldSupplier.amount || 0);
+                let currentType = oldSupplier.amount_type || 'none';
+                let signedBalance = currentType === 'creditor' ? -currentAmount : currentAmount;
+                
+                // Reverting old credit purchase (reducing what we owe)
+                signedBalance += parseFloat(oldSlip.total_amount || 0);
+
+                let newType = 'none';
+                if (signedBalance > 0.001) newType = 'debtor';
+                else if (signedBalance < -0.001) newType = 'creditor';
+                let newAmount = Math.abs(signedBalance);
+
+                await supabase.from('ledger_transactions').insert([{
+                    tenant_id: authState.owner.tenant_id,
+                    entity_type: 'supplier',
+                    entity_id: oldSupplier.id,
+                    transaction_type: 'PAYMENT_GIVEN',
+                    amount: parseFloat(oldSlip.total_amount || 0),
+                    transaction_date: new Date().toISOString().split('T')[0],
+                    notes: `Reverted for Edit Slip #${oldSlip.invoice_number || ''}`
+                }]);
+
+                await supabase.from('suppliers').update({
+                    amount: newAmount,
+                    amount_type: newType
+                }).eq('id', oldSupplier.id).eq('tenant_id', authState.owner.tenant_id);
+
+                oldSupplier.amount = newAmount;
+                oldSupplier.amount_type = newType;
+            }
+        }
+
+        // -------------------------------------------------------------
+        // STEP 2: APPLY NEW PURCHASE SLIP DATA
+        // -------------------------------------------------------------
+        const newTotalAmount = editPurchaseState.items.reduce((sum, i) => sum + i.amount, 0);
+
+        // A. Update purchase_slips table
+        const updatePayload = {
+            supplier_name: supplierName,
+            supplier_phone: supplierPhone,
+            supplier_gstin: supplierGstin,
+            supplier_address: supplierAddress,
+            invoice_number: invoiceNumber,
+            invoice_date: invoiceDate,
+            entry_date: entryDate,
+            payment_mode: paymentMode,
+            total_amount: newTotalAmount
+        };
+
+        let { error: updateSlipErr } = await supabase
+            .from('purchase_slips')
+            .update(updatePayload)
+            .eq('id', slipId);
+
+        if (updateSlipErr && updateSlipErr.message && updateSlipErr.message.includes('payment_mode')) {
+            delete updatePayload.payment_mode;
+            const res = await supabase.from('purchase_slips').update(updatePayload).eq('id', slipId);
+            updateSlipErr = res.error;
+        }
+
+        if (updateSlipErr) throw updateSlipErr;
+
+        // B. Replace items in purchase_slip_items
+        await supabase.from('purchase_slip_items').delete().eq('purchase_slip_id', slipId);
+
+        const newItemsToInsert = editPurchaseState.items.map(i => ({
+            purchase_slip_id: slipId,
+            tenant_id: authState.owner.tenant_id,
+            upc: i.upc || null,
+            product_name: i.product_name,
+            bought_qty: i.bought_qty,
+            free_qty: i.free_qty,
+            total_qty: i.total_qty,
+            expiry_date: i.expiry_date || null,
+            bought_price: i.bought_price,
+            selling_price: i.selling_price,
+            discount: i.discount || 0,
+            amount: i.amount
+        }));
+
+        const { error: insertItemsErr } = await supabase
+            .from('purchase_slip_items')
+            .insert(newItemsToInsert);
+
+        if (insertItemsErr) throw insertItemsErr;
+
+        // C. Apply new stock and product updates
+        for (const item of newItemsToInsert) {
+            let matchedProduct = null;
+            if (item.upc) matchedProduct = (appState.products || []).find(p => p.upc === item.upc);
+            if (!matchedProduct && item.product_name) matchedProduct = (appState.products || []).find(p => p.name.toLowerCase() === item.product_name.toLowerCase());
+
+            if (matchedProduct) {
+                const updatedStock = (matchedProduct.stock || 0) + item.total_qty;
+                const updateProdPayload = { stock: updatedStock };
+                if (item.selling_price > 0) updateProdPayload.price = item.selling_price;
+                
+                await supabase.from('products').update(updateProdPayload).eq('id', matchedProduct.id);
+                matchedProduct.stock = updatedStock;
+                if (item.selling_price > 0) matchedProduct.price = item.selling_price;
+            } else {
+                const { data: newProd } = await supabase.from('products').insert([{
+                    tenant_id: authState.owner.tenant_id,
+                    name: item.product_name,
+                    upc: item.upc,
+                    price: item.selling_price || item.bought_price || 0,
+                    stock: item.total_qty,
+                    is_in_house: false
+                }]).select().single();
+                if (newProd) appState.products.push(newProd);
+            }
+        }
+
+        // D. Apply new supplier debt if new slip is on CREDIT
+        const creditAmt = paymentMode === 'CREDIT' ? newTotalAmount : 0;
+        await checkAndAutoAddSupplier(supplierName, supplierPhone, supplierGstin, supplierAddress, creditAmt, invoiceNumber, entryDate);
+
+        // -------------------------------------------------------------
+        // STEP 3: REFRESH VIEWS & COMPLETE
+        // -------------------------------------------------------------
+        closeModals();
+        showToast('Purchase slip updated successfully!');
+
+        await loadInventory();
+        await loadSuppliers();
+        if (typeof renderPurchaseHistory === 'function') renderPurchaseHistory();
+        if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+        if (typeof loadDashboard === 'function') loadDashboard(appState.dashboardFilter || 'today');
+
+    } catch (err) {
+        console.error('Error saving edited purchase slip:', err);
+        alert('Failed to save purchase slip changes: ' + err.message);
+    } finally {
+        if (saveBtn) { saveBtn.textContent = originalText; saveBtn.disabled = false; }
+    }
+});
+
+let purchasesInitialized = false;
+
 function initPurchases() {
     // Set default entry date
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     const entryDateInput = document.getElementById('purchase-entry-date');
-    if (entryDateInput) entryDateInput.value = today;
+    if (entryDateInput && !entryDateInput.value) entryDateInput.value = today;
 
-    // Setup autocomplete for supplier name
+    // Avoid duplicate event listener attachments
+    if (purchasesInitialized) return;
+    purchasesInitialized = true;
+
+    // 1. Setup autocomplete for supplier name
     const supplierNameInput = document.getElementById('purchase-supplier-name');
     const suggestionsBox = document.getElementById('supplier-suggestions');
 
@@ -5327,7 +6217,7 @@ function initPurchases() {
                 return;
             }
 
-            const matches = appState.suppliers.filter(s => 
+            const matches = (appState.suppliers || []).filter(s => 
                 s.name.toLowerCase().includes(query) || 
                 (s.phone && s.phone.includes(query))
             );
@@ -5336,7 +6226,7 @@ function initPurchases() {
                 matches.forEach(s => {
                     const div = document.createElement('div');
                     div.className = 'suggestion-item';
-                    div.innerHTML = `<strong>${s.name}</strong><br><small>${s.phone || 'No phone'}</small>`;
+                    div.innerHTML = `<strong>${s.name}</strong><small style="color:var(--text-secondary);">${s.phone ? '📞 ' + s.phone : 'No phone'}</small>`;
                     div.onclick = () => {
                         supplierNameInput.value = s.name;
                         document.getElementById('purchase-supplier-phone').value = s.phone || '';
@@ -5351,15 +6241,153 @@ function initPurchases() {
                 suggestionsBox.classList.add('hidden');
             }
         });
+    }
 
-        // Hide when clicking outside
-        document.addEventListener('click', (e) => {
-            if (supplierNameInput && suggestionsBox) {
-                if (!supplierNameInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
-                    suggestionsBox.classList.add('hidden');
-                }
+    // 2. Setup autocomplete for UPC / Barcode in purchase item entry
+    const upcInput = document.getElementById('purchase-item-upc');
+    const upcSuggestions = document.getElementById('purchase-upc-suggestions');
+
+    if (upcInput && upcSuggestions) {
+        upcInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            upcSuggestions.innerHTML = '';
+
+            if (!query) {
+                upcSuggestions.classList.add('hidden');
+                return;
+            }
+
+            const matches = (appState.products || []).filter(p => 
+                (p.upc && p.upc.toLowerCase().includes(query)) ||
+                (p.name && p.name.toLowerCase().includes(query))
+            ).slice(0, 8);
+
+            if (matches.length > 0) {
+                matches.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerHTML = `
+                        <strong>${p.name}</strong>
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
+                            <span>UPC: <strong style="color:var(--primary-color);">${p.upc || 'N/A'}</strong></span>
+                            <span>Selling: ₹${p.price} • Stock: ${p.is_in_house ? 'Unlimited' : p.stock}</span>
+                        </div>
+                    `;
+                    div.onclick = () => {
+                        selectProductForPurchase(p);
+                    };
+                    upcSuggestions.appendChild(div);
+                });
+                upcSuggestions.classList.remove('hidden');
+            } else {
+                upcSuggestions.classList.add('hidden');
             }
         });
+
+        // Exact match check on change (e.g. from barcode scanner)
+        upcInput.addEventListener('change', () => {
+            const val = upcInput.value.trim();
+            if (!val) return;
+            const exact = (appState.products || []).find(p => p.upc && p.upc.toLowerCase() === val.toLowerCase());
+            if (exact) {
+                selectProductForPurchase(exact);
+            }
+        });
+    }
+
+    // 3. Setup autocomplete for Product Name in purchase item entry
+    const nameInput = document.getElementById('purchase-item-name');
+    const nameSuggestions = document.getElementById('purchase-name-suggestions');
+
+    if (nameInput && nameSuggestions) {
+        nameInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            nameSuggestions.innerHTML = '';
+
+            if (!query) {
+                nameSuggestions.classList.add('hidden');
+                return;
+            }
+
+            const matches = (appState.products || []).filter(p => 
+                p.name.toLowerCase().includes(query) ||
+                (p.upc && p.upc.toLowerCase().includes(query))
+            ).slice(0, 8);
+
+            if (matches.length > 0) {
+                matches.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerHTML = `
+                        <strong>${p.name}</strong>
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
+                            <span>${p.upc ? 'UPC: ' + p.upc : 'No UPC'}</span>
+                            <span>Selling: ₹${p.price} • Stock: ${p.is_in_house ? 'Unlimited' : p.stock}</span>
+                        </div>
+                    `;
+                    div.onclick = () => {
+                        selectProductForPurchase(p);
+                    };
+                    nameSuggestions.appendChild(div);
+                });
+                nameSuggestions.classList.remove('hidden');
+            } else {
+                nameSuggestions.classList.add('hidden');
+            }
+        });
+    }
+
+    // Global click listener to close suggestion dropdowns
+    document.addEventListener('click', (e) => {
+        if (supplierNameInput && suggestionsBox) {
+            if (!supplierNameInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                suggestionsBox.classList.add('hidden');
+            }
+        }
+        if (upcInput && upcSuggestions) {
+            if (!upcInput.contains(e.target) && !upcSuggestions.contains(e.target)) {
+                upcSuggestions.classList.add('hidden');
+            }
+        }
+        if (nameInput && nameSuggestions) {
+            if (!nameInput.contains(e.target) && !nameSuggestions.contains(e.target)) {
+                nameSuggestions.classList.add('hidden');
+            }
+        }
+    });
+}
+
+function selectProductForPurchase(product) {
+    if (!product) return;
+    
+    const upcInput = document.getElementById('purchase-item-upc');
+    const nameInput = document.getElementById('purchase-item-name');
+    const sellingPriceInput = document.getElementById('purchase-item-selling-price');
+    const boughtPriceInput = document.getElementById('purchase-item-bought-price');
+    const boughtQtyInput = document.getElementById('purchase-item-bought-qty');
+
+    if (upcInput) upcInput.value = product.upc || '';
+    if (nameInput) nameInput.value = product.name || '';
+    if (sellingPriceInput && (product.price !== undefined && product.price !== null)) {
+        sellingPriceInput.value = product.price;
+    }
+
+    // Hide dropdowns
+    const upcSuggestions = document.getElementById('purchase-upc-suggestions');
+    const nameSuggestions = document.getElementById('purchase-name-suggestions');
+    if (upcSuggestions) upcSuggestions.classList.add('hidden');
+    if (nameSuggestions) nameSuggestions.classList.add('hidden');
+
+    // Recalculate totals
+    if (typeof updatePurchaseItemCalc === 'function') updatePurchaseItemCalc();
+
+    // Set focus to bought price or bought qty for fast entry flow
+    if (boughtPriceInput && (!boughtPriceInput.value || parseFloat(boughtPriceInput.value) === 0)) {
+        boughtPriceInput.focus();
+        boughtPriceInput.select();
+    } else if (boughtQtyInput) {
+        boughtQtyInput.focus();
+        boughtQtyInput.select();
     }
 }
 
@@ -5431,6 +6459,12 @@ function addPurchaseItem() {
     document.getElementById('purchase-item-bought-price').value = '0';
     document.getElementById('purchase-item-selling-price').value = '0';
     document.getElementById('purchase-item-discount').value = '0';
+
+    const upcSuggestions = document.getElementById('purchase-upc-suggestions');
+    const nameSuggestions = document.getElementById('purchase-name-suggestions');
+    if (upcSuggestions) upcSuggestions.classList.add('hidden');
+    if (nameSuggestions) nameSuggestions.classList.add('hidden');
+
     updatePurchaseItemCalc();
     
     document.getElementById('purchase-item-upc').focus();
@@ -5475,26 +6509,102 @@ function removePurchaseItem(id) {
     renderPurchaseCart();
 }
 
-async function checkAndAutoAddSupplier(name, phone, gstin, address) {
-    if (!name) return;
-    const existing = appState.suppliers.find(s => 
+async function addSupplierCreditPurchase(supplier, amount, invoiceNumber, slipDate) {
+    if (!supplier || !amount || amount <= 0) return;
+    try {
+        let currentAmount = parseFloat(supplier.amount || 0);
+        let currentType = supplier.amount_type || 'none';
+        let signedBalance = currentType === 'creditor' ? -currentAmount : currentAmount;
+        
+        // Adding credit (we owe supplier more money)
+        signedBalance -= parseFloat(amount);
+        
+        let newType = 'none';
+        if (signedBalance > 0.001) newType = 'debtor';
+        else if (signedBalance < -0.001) newType = 'creditor';
+        let newAmount = Math.abs(signedBalance);
+
+        // Record in ledger_transactions
+        await supabase.from('ledger_transactions').insert([{
+            tenant_id: authState.owner.tenant_id,
+            entity_type: 'supplier',
+            entity_id: supplier.id,
+            transaction_type: 'ADD_CREDIT',
+            amount: parseFloat(amount),
+            transaction_date: slipDate || new Date().toISOString().split('T')[0],
+            notes: `Purchase Slip #${invoiceNumber || ''}`
+        }]);
+
+        // Update supplier balance in DB
+        await supabase.from('suppliers').update({
+            amount: newAmount,
+            amount_type: newType
+        }).eq('id', supplier.id).eq('tenant_id', authState.owner.tenant_id);
+
+        supplier.amount = newAmount;
+        supplier.amount_type = newType;
+        if (typeof renderSuppliers === 'function') renderSuppliers();
+        if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+    } catch (err) {
+        console.error("Error adding supplier debt for credit purchase:", err);
+    }
+}
+
+async function checkAndAutoAddSupplier(name, phone, gstin, address, creditAmount = 0, invoiceNumber = '', slipDate = '') {
+    if (!name) return null;
+    let supplier = (appState.suppliers || []).find(s => 
         (phone && s.phone === phone) || 
         (!phone && s.name.toLowerCase() === name.toLowerCase())
     );
 
-    if (!existing) {
+    if (!supplier) {
         try {
-            const { error } = await supabase
+            let initialAmount = 0;
+            let initialType = null;
+            if (creditAmount > 0) {
+                initialAmount = parseFloat(creditAmount);
+                initialType = 'creditor';
+            }
+
+            const payload = {
+                tenant_id: authState.owner.tenant_id,
+                name, phone, gstin, address,
+                amount: initialAmount,
+                amount_type: initialType
+            };
+
+            const { data, error } = await supabase
                 .from('suppliers')
-                .insert([{
-                    name, phone, gstin, address,
-                    tenant_id: authState.owner.tenant_id
-                }]);
-            if (!error) loadSuppliers();
+                .insert([payload])
+                .select()
+                .single();
+
+            if (!error && data) {
+                appState.suppliers.push(data);
+                supplier = data;
+                if (creditAmount > 0) {
+                    await supabase.from('ledger_transactions').insert([{
+                        tenant_id: authState.owner.tenant_id,
+                        entity_type: 'supplier',
+                        entity_id: data.id,
+                        transaction_type: 'ADD_CREDIT',
+                        amount: parseFloat(creditAmount),
+                        transaction_date: slipDate || new Date().toISOString().split('T')[0],
+                        notes: `Purchase Slip #${invoiceNumber || ''}`
+                    }]);
+                }
+                if (typeof renderSuppliers === 'function') renderSuppliers();
+                if (typeof updateDashboardPayables === 'function') updateDashboardPayables();
+            }
         } catch (e) {
             console.error('Error auto-adding supplier', e);
         }
+    } else {
+        if (creditAmount > 0) {
+            await addSupplierCreditPurchase(supplier, creditAmount, invoiceNumber, slipDate);
+        }
     }
+    return supplier;
 }
 
 async function savePurchaseSlip() {
@@ -5515,6 +6625,7 @@ async function savePurchaseSlip() {
     const invoiceDate = document.getElementById('purchase-invoice-date').value || null;
     const invoiceNumber = document.getElementById('purchase-invoice-number').value.trim();
     const entryDate = document.getElementById('purchase-entry-date').value;
+    const paymentMode = document.querySelector('input[name="purchase-paymode"]:checked')?.value || 'CASH';
 
     if (!entryDate) {
         alert("Entry Date is required.");
@@ -5529,26 +6640,38 @@ async function savePurchaseSlip() {
     btn.disabled = true;
 
     try {
-        // Auto add supplier
-        await checkAndAutoAddSupplier(supplierName, supplierPhone, supplierGstin, supplierAddress);
+        // 1. Auto add supplier & credit debt if mode is Credit
+        const creditAmt = paymentMode === 'CREDIT' ? totalAmount : 0;
+        await checkAndAutoAddSupplier(supplierName, supplierPhone, supplierGstin, supplierAddress, creditAmt, invoiceNumber, entryDate);
 
-        // Save Purchase Slip
-        const { data: slip, error: slipError } = await supabase
+        // 2. Save Purchase Slip
+        const slipPayload = {
+            tenant_id: authState.owner.tenant_id,
+            supplier_name: supplierName,
+            supplier_phone: supplierPhone,
+            supplier_gstin: supplierGstin,
+            supplier_address: supplierAddress,
+            invoice_date: invoiceDate,
+            invoice_number: invoiceNumber,
+            entry_date: entryDate,
+            payment_mode: paymentMode,
+            total_amount: totalAmount,
+            created_by: authState.owner.id
+        };
+
+        let { data: slip, error: slipError } = await supabase
             .from('purchase_slips')
-            .insert([{
-                tenant_id: authState.owner.tenant_id,
-                supplier_name: supplierName,
-                supplier_phone: supplierPhone,
-                supplier_gstin: supplierGstin,
-                supplier_address: supplierAddress,
-                invoice_date: invoiceDate,
-                invoice_number: invoiceNumber,
-                entry_date: entryDate,
-                total_amount: totalAmount,
-                created_by: authState.owner.id
-            }])
+            .insert([slipPayload])
             .select()
             .single();
+
+        if (slipError && slipError.message && slipError.message.includes('payment_mode')) {
+            delete slipPayload.payment_mode;
+            const fallbackRes = await supabase.from('purchase_slips').insert([slipPayload]).select().single();
+            slip = fallbackRes.data;
+            slipError = fallbackRes.error;
+            if (slip) slip.payment_mode = paymentMode;
+        }
 
         if (slipError) throw slipError;
 
@@ -6042,6 +7165,7 @@ async function printPurchaseSlip(slipId) {
                     <p><strong>Invoice No:</strong> ${slip.invoice_number || '-'}</p>
                     <p><strong>Invoice Date:</strong> ${slip.invoice_date || '-'}</p>
                     <p><strong>Supplier:</strong> ${slip.supplier_name || '-'} (${slip.supplier_phone || '-'})</p>
+                    <p><strong>Payment Mode:</strong> ${slip.payment_mode === 'CREDIT' ? 'Credit (Khata)' : (slip.payment_mode || 'Cash')}</p>
                 </div>
                 <table>
                     <thead>

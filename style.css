@@ -471,8 +471,8 @@ body {
 .qty-controls {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin: 0 1rem;
+    gap: 0.35rem;
+    margin: 0 0.5rem;
 }
 
 .qty-btn {
@@ -485,6 +485,34 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    font-weight: bold;
+    font-size: 0.95rem;
+}
+
+.qty-input {
+    width: 44px;
+    height: 24px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-surface, #ffffff);
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 2px 0;
+    -moz-appearance: textfield;
+}
+
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.qty-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .special-price-btn {
@@ -561,8 +589,19 @@ body {
 
 .mode-options {
     display: flex;
-    gap: 1rem;
-    margin-top: 0.25rem;
+    gap: 0.85rem;
+    margin-top: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.mode-options label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    font-weight: 500;
+    user-select: none;
 }
 
 .checkout-btn {
@@ -723,6 +762,49 @@ body {
 
 .sales-table tr:hover {
     background: #F9FAFB;
+}
+
+/* Autocomplete Dropdowns */
+.autocomplete-wrapper {
+    position: relative;
+}
+
+.suggestions-dropdown {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--bg-surface, #ffffff);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+    z-index: 100;
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    font-size: 0.875rem;
+    transition: background 0.15s ease;
+    text-align: left;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover,
+.suggestion-item.active {
+    background: var(--bg-app, #f4f7fe);
+}
+
+.suggestion-item strong {
+    color: var(--text-primary, #1e293b);
+    display: block;
+    margin-bottom: 2px;
 }
 
 .modal-actions {
@@ -2559,14 +2641,16 @@ body {
         border-color: #2563EB;
     }
 
-    /* Billing Dark Theme (Search & Products) */
-    #billing-search {
+    /* Billing & Dashboard Inventory Dark Theme (Search & Products) */
+    #billing-search,
+    #dashboard-inventory-search {
         background-color: #1E293B !important;
         color: #F1F5F9 !important;
         border: 1px solid #334155 !important;
     }
 
-    #billing-search::placeholder {
+    #billing-search::placeholder,
+    #dashboard-inventory-search::placeholder {
         color: #94A3B8;
         opacity: 0.7;
     }
@@ -2622,6 +2706,12 @@ body {
         border: 1px solid #475569 !important;
     }
 
+    .qty-controls .qty-input {
+        background-color: #0F172A !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #475569 !important;
+    }
+
     .remove-btn {
         color: #EF4444 !important;
         /* Red X */
@@ -2663,6 +2753,26 @@ body {
         background-color: #0F172A !important;
         border: 1px solid #334155 !important;
         color: #F1F5F9;
+    }
+
+    .suggestions-dropdown {
+        background: #1E293B !important;
+        border: 1px solid #334155 !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .suggestion-item {
+        border-bottom: 1px solid #334155 !important;
+        color: #F1F5F9 !important;
+    }
+
+    .suggestion-item:hover,
+    .suggestion-item.active {
+        background: #334155 !important;
+    }
+
+    .suggestion-item strong {
+        color: #F1F5F9 !important;
     }
 
     /* Style Save Name button on mobile to match Add Employee */

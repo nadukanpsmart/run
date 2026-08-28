@@ -289,6 +289,14 @@
                         <p class="stat-value" id="stat-upi">₹0</p>
                     </div>
                     <div class="stat-card">
+                        <h3>Card Collected</h3>
+                        <p class="stat-value" id="stat-card">₹0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Credit (Khata)</h3>
+                        <p class="stat-value" id="stat-credit">₹0</p>
+                    </div>
+                    <div class="stat-card">
                         <h3>Other</h3>
                         <p class="stat-value" id="stat-other">₹0</p>
                     </div>
@@ -310,6 +318,38 @@
                     <h2 style="font-size: 1.1rem; margin-bottom: 1rem;">Top Selling Products</h2>
                     <div class="top-products-list" id="top-products-list">
                         <!-- Injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Dashboard Inventory Details Subsection -->
+                <div class="dashboard-section" style="margin-top: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 1rem;">
+                        <div>
+                            <h2 style="font-size: 1.1rem; margin-bottom: 2px;">Inventory Details</h2>
+                            <span id="dashboard-inventory-count" style="font-size: 0.8rem; color: var(--text-secondary);">Loading inventory...</span>
+                        </div>
+                        <div style="position: relative; min-width: 220px; max-width: 320px; flex: 1;">
+                            <input type="text" id="dashboard-inventory-search" placeholder="Search by name or UPC..." oninput="renderDashboardInventory()" style="width: 100%; padding: 7px 12px; font-size: 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-surface); color: var(--text-primary);">
+                        </div>
+                    </div>
+
+                    <div class="sales-table-container dashboard-inventory-table-container" style="max-height: 480px; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface);">
+                        <table class="sales-table dashboard-inventory-table" style="width: 100%; border-collapse: collapse; min-width: 580px; font-size: 0.875rem;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-surface); z-index: 2; border-bottom: 2px solid var(--border-color);">
+                                <tr>
+                                    <th style="padding: 10px 12px; text-align: left;">Product</th>
+                                    <th style="padding: 10px 12px; text-align: left;">UPC</th>
+                                    <th style="padding: 10px 12px; text-align: center;">Available Qty</th>
+                                    <th style="padding: 10px 12px; text-align: right;">Price</th>
+                                    <th style="padding: 10px 12px; text-align: left;">Purchase / Updated Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashboard-inventory-tbody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading inventory records...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -499,6 +539,16 @@
                                 <label>Entry Date *</label>
                                 <input type="date" id="purchase-entry-date" required>
                             </div>
+                            <div class="form-group" style="margin-bottom: 0; grid-column: 1 / -1;">
+                                <label>Payment Mode *</label>
+                                <div class="mode-options" style="margin-top: 0.35rem;">
+                                    <label><input type="radio" name="purchase-paymode" value="CASH" checked> Cash</label>
+                                    <label><input type="radio" name="purchase-paymode" value="UPI"> UPI</label>
+                                    <label><input type="radio" name="purchase-paymode" value="CARD"> Card</label>
+                                    <label><input type="radio" name="purchase-paymode" value="CREDIT"> Credit (Khata)</label>
+                                    <label><input type="radio" name="purchase-paymode" value="OTHER"> Other</label>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -506,13 +556,15 @@
                     <div class="card">
                         <h2 class="card-title">Add Purchase Item</h2>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-                            <div class="form-group" style="margin-bottom: 0;">
+                            <div class="form-group autocomplete-wrapper" style="margin-bottom: 0; position: relative;">
                                 <label>UPC / Barcode</label>
-                                <input type="text" id="purchase-item-upc" placeholder="Scan or type">
+                                <input type="text" id="purchase-item-upc" placeholder="Scan or type" autocomplete="off">
+                                <div id="purchase-upc-suggestions" class="suggestions-dropdown hidden"></div>
                             </div>
-                            <div class="form-group" style="margin-bottom: 0;">
+                            <div class="form-group autocomplete-wrapper" style="margin-bottom: 0; position: relative;">
                                 <label>Product Name *</label>
-                                <input type="text" id="purchase-item-name" placeholder="Name">
+                                <input type="text" id="purchase-item-name" placeholder="Name" autocomplete="off">
+                                <div id="purchase-name-suggestions" class="suggestions-dropdown hidden"></div>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label>Bought Qty *</label>
@@ -762,6 +814,8 @@
                             <div class="mode-options">
                                 <label><input type="radio" name="paymode" value="CASH" checked> Cash</label>
                                 <label><input type="radio" name="paymode" value="UPI"> UPI</label>
+                                <label><input type="radio" name="paymode" value="CARD"> Card</label>
+                                <label><input type="radio" name="paymode" value="CREDIT"> Credit (Khata)</label>
                                 <label><input type="radio" name="paymode" value="OTHER"> Other</label>
                             </div>
                         </div>
@@ -783,6 +837,14 @@
                         <input type="date" id="purchase-history-date-to" placeholder="To">
                         <input type="text" id="purchase-history-supplier" placeholder="Search Supplier" oninput="renderPurchaseHistory()">
                         <input type="text" id="purchase-history-invoice" placeholder="Invoice No" oninput="renderPurchaseHistory()">
+                        <select id="purchase-history-payment" onchange="renderPurchaseHistory()">
+                            <option value="all">All Payment Modes</option>
+                            <option value="CASH">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="CARD">Card</option>
+                            <option value="CREDIT">Credit (Khata)</option>
+                            <option value="OTHER">Other</option>
+                        </select>
                         <button class="action-btn small" onclick="renderPurchaseHistory()">Filter</button>
                     </div>
                 </div>
@@ -796,6 +858,7 @@
                             <th>Entry Date</th>
                             <th>Invoice Date</th>
                             <th>Supplier</th>
+                            <th>Payment Mode</th>
                             <th>Items</th>
                             <th>Total Amount</th>
                             <th>Action</th>
@@ -825,6 +888,8 @@
                             <option value="all">All Payment Modes</option>
                             <option value="CASH">Cash</option>
                             <option value="UPI">UPI</option>
+                            <option value="CARD">Card</option>
+                            <option value="CREDIT">Credit (Khata)</option>
                             <option value="OTHER">Other</option>
                         </select>
                         <select id="sales-sort" onchange="loadSales()">
@@ -1414,6 +1479,8 @@
                         <label style="font-weight: 600; font-size: 0.9rem; margin-right: 0.5rem;">Payment Mode:</label>
                         <label style="margin-right: 0.5rem;"><input type="radio" name="edit-paymode" value="CASH"> Cash</label>
                         <label style="margin-right: 0.5rem;"><input type="radio" name="edit-paymode" value="UPI"> UPI</label>
+                        <label style="margin-right: 0.5rem;"><input type="radio" name="edit-paymode" value="CARD"> Card</label>
+                        <label style="margin-right: 0.5rem;"><input type="radio" name="edit-paymode" value="CREDIT"> Credit (Khata)</label>
                         <label><input type="radio" name="edit-paymode" value="OTHER"> Other</label>
                     </div>
                     
@@ -1463,6 +1530,131 @@
                 <div class="modal-actions">
                     <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
                     <button type="submit" class="save-btn primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Edit Purchase Slip Modal -->
+        <div id="modal-edit-purchase" class="modal hidden" style="max-width: 920px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+            <h2 style="margin-bottom: 0.75rem;">Edit Purchase Slip <span id="edit-purchase-invoice-title" style="color:var(--primary-color);"></span></h2>
+            <form id="edit-purchase-form" style="display: flex; flex-direction: column; overflow: hidden; flex: 1;">
+                <input type="hidden" id="edit-purchase-id">
+                
+                <div style="overflow-y: auto; padding-right: 4px; flex: 1;">
+                    <!-- Supplier & Slip Details Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; background: var(--bg-body); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div class="form-group autocomplete-wrapper" style="margin-bottom: 0;">
+                            <label>Supplier Name *</label>
+                            <input type="text" id="edit-purchase-supplier-name" required placeholder="Supplier Name">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Supplier Phone</label>
+                            <input type="text" id="edit-purchase-supplier-phone" placeholder="Phone">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Supplier GSTIN</label>
+                            <input type="text" id="edit-purchase-supplier-gstin" placeholder="GSTIN (Optional)" style="text-transform: uppercase;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Invoice Number</label>
+                            <input type="text" id="edit-purchase-invoice-number" placeholder="Invoice #">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Invoice Date</label>
+                            <input type="date" id="edit-purchase-invoice-date">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Entry Date *</label>
+                            <input type="date" id="edit-purchase-entry-date" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0; grid-column: 1 / -1;">
+                            <label>Supplier Address</label>
+                            <textarea id="edit-purchase-supplier-address" rows="2" placeholder="Supplier Address" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit; font-size: 0.85rem; resize: vertical;"></textarea>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0; grid-column: 1 / -1;">
+                            <label>Payment Mode *</label>
+                            <div class="mode-options" style="margin-top: 0.25rem;">
+                                <label><input type="radio" name="edit-purchase-paymode" value="CASH"> Cash</label>
+                                <label><input type="radio" name="edit-purchase-paymode" value="UPI"> UPI</label>
+                                <label><input type="radio" name="edit-purchase-paymode" value="CARD"> Card</label>
+                                <label><input type="radio" name="edit-purchase-paymode" value="CREDIT"> Credit (Khata)</label>
+                                <label><input type="radio" name="edit-purchase-paymode" value="OTHER"> Other</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Items Table Header -->
+                    <h3 style="font-size: 1rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Purchase Items</span>
+                        <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-secondary);">Directly edit values in the table below</span>
+                    </h3>
+
+                    <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1rem;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                            <thead>
+                                <tr style="background: var(--bg-body); border-bottom: 1px solid var(--border-color); text-align: left;">
+                                    <th style="padding: 6px 8px;">#</th>
+                                    <th style="padding: 6px 8px; min-width: 140px;">Product Name / UPC</th>
+                                    <th style="padding: 6px 8px; width: 75px;">Bought</th>
+                                    <th style="padding: 6px 8px; width: 65px;">Free</th>
+                                    <th style="padding: 6px 8px; width: 65px;">Total</th>
+                                    <th style="padding: 6px 8px; width: 85px;">Bought ₹</th>
+                                    <th style="padding: 6px 8px; width: 85px;">Selling ₹</th>
+                                    <th style="padding: 6px 8px; width: 70px;">Disc ₹</th>
+                                    <th style="padding: 6px 8px; width: 90px; text-align: right;">Amount ₹</th>
+                                    <th style="padding: 6px 8px; width: 45px; text-align: center;">✕</th>
+                                </tr>
+                            </thead>
+                            <tbody id="edit-purchase-items-body">
+                                <!-- Injected Dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Add Item Row -->
+                    <div style="display: grid; grid-template-columns: 1.5fr 1fr 70px 60px 80px 80px 70px auto; gap: 0.4rem; align-items: end; margin-bottom: 1rem; background: var(--bg-body); padding: 0.6rem; border-radius: 8px; border: 1px dashed var(--border-color);">
+                        <div class="form-group autocomplete-wrapper" style="margin-bottom: 0; position: relative;">
+                            <label style="font-size: 0.75rem;">Item Name</label>
+                            <input type="text" id="edit-purchase-new-name" placeholder="Name" autocomplete="off">
+                            <div id="edit-purchase-name-suggestions" class="suggestions-dropdown hidden"></div>
+                        </div>
+                        <div class="form-group autocomplete-wrapper" style="margin-bottom: 0; position: relative;">
+                            <label style="font-size: 0.75rem;">UPC</label>
+                            <input type="text" id="edit-purchase-new-upc" placeholder="Barcode" autocomplete="off">
+                            <div id="edit-purchase-upc-suggestions" class="suggestions-dropdown hidden"></div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.75rem;">Bought</label>
+                            <input type="number" id="edit-purchase-new-bought-qty" min="0" value="1">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.75rem;">Free</label>
+                            <input type="number" id="edit-purchase-new-free-qty" min="0" value="0">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.75rem;">Bought ₹</label>
+                            <input type="number" id="edit-purchase-new-bought-price" min="0" step="0.01" value="0">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.75rem;">Selling ₹</label>
+                            <input type="number" id="edit-purchase-new-selling-price" min="0" step="0.01" value="0">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.75rem;">Disc ₹</label>
+                            <input type="number" id="edit-purchase-new-discount" min="0" step="0.01" value="0">
+                        </div>
+                        <button type="button" class="action-btn primary small" onclick="editPurchaseAddNewItem()" style="height: 34px;">+ Add</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-body); padding: 0.75rem 1rem; border-radius: 8px; margin-top: 0.5rem; font-weight: 600;">
+                    <div>Total Items: <span id="edit-purchase-items-count">0</span></div>
+                    <div style="font-size: 1.15rem; color: var(--primary-color);">Total Slip Amount: <span id="edit-purchase-total-display">₹0.00</span></div>
+                </div>
+
+                <div class="modal-actions" style="margin-top: 0.75rem;">
+                    <button type="button" class="cancel-btn" onclick="closeModals()">Cancel</button>
+                    <button type="submit" class="save-btn primary" id="btn-save-edit-purchase">Save Changes</button>
                 </div>
             </form>
         </div>
