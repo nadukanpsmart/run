@@ -4883,6 +4883,7 @@ document.getElementById('undo-bill-form').addEventListener('submit', async (e) =
 // ==========================================
 let editBillState = {
     billId: null,
+    originalBillNumber: '',
     items: []
 };
 
@@ -4911,6 +4912,7 @@ async function openEditBillModal(billId) {
         if (itemsError || !items) throw itemsError;
 
         editBillState.billId = bill.id;
+        editBillState.originalBillNumber = bill.bill_number || '';
         editBillState.items = items.map(item => ({
             id: item.id,
             product_id: item.product_id,
@@ -4921,6 +4923,15 @@ async function openEditBillModal(billId) {
 
         document.getElementById('edit-bill-id').value = bill.id;
         document.getElementById('edit-bill-number-title').textContent = '#' + (bill.bill_number || bill.id.slice(0, 8));
+
+        const editBillNumberInput = document.getElementById('edit-bill-number');
+        if (editBillNumberInput) {
+            editBillNumberInput.value = bill.bill_number || '';
+            editBillNumberInput.oninput = (e) => {
+                const val = e.target.value.trim();
+                document.getElementById('edit-bill-number-title').textContent = '#' + (val || bill.id.slice(0, 8));
+            };
+        }
         
         const dateObj = bill.created_at ? new Date(bill.created_at) : new Date();
         const tzoffset = dateObj.getTimezoneOffset() * 60000;
@@ -5113,6 +5124,29 @@ document.getElementById('edit-bill-form')?.addEventListener('submit', async (e) 
         return;
     }
 
+    const billNumber = (document.getElementById('edit-bill-number')?.value || '').trim();
+    if (!billNumber) {
+        alert('Bill number cannot be empty.');
+        return;
+    }
+
+    const oldBillNumber = editBillState.originalBillNumber;
+    if (billNumber !== oldBillNumber) {
+        const { data: existingBillWithNumber } = await supabase
+            .from('bills')
+            .select('id')
+            .eq('tenant_id', authState.owner.tenant_id)
+            .eq('bill_number', billNumber)
+            .neq('id', billId)
+            .maybeSingle();
+
+        if (existingBillWithNumber) {
+            if (!confirm(`Warning: A bill with Bill Number "${billNumber}" already exists. Do you still want to save with this bill number?`)) {
+                return;
+            }
+        }
+    }
+
     const customerName = document.getElementById('edit-bill-customer-name').value.trim();
     const customerPhone = document.getElementById('edit-bill-customer-phone').value.trim();
     const customerGstin = (document.getElementById('edit-bill-customer-gstin')?.value || '').trim().toUpperCase();
@@ -5139,6 +5173,7 @@ document.getElementById('edit-bill-form')?.addEventListener('submit', async (e) 
     if (final < 0) final = 0;
 
     const billPayload = {
+        bill_number: billNumber,
         created_at: editedDate.toISOString(),
         customer_name: customerName,
         customer_phone: customerPhone,
@@ -5166,6 +5201,19 @@ document.getElementById('edit-bill-form')?.addEventListener('submit', async (e) 
     if (updateError) {
         alert('Failed to update bill: ' + updateError.message);
         return;
+    }
+
+    // If bill number changed, also update any corresponding ledger transaction notes
+    if (oldBillNumber && oldBillNumber !== billNumber) {
+        try {
+            await supabase
+                .from('ledger_transactions')
+                .update({ notes: `Credit Bill #${billNumber}` })
+                .eq('tenant_id', authState.owner.tenant_id)
+                .eq('notes', `Credit Bill #${oldBillNumber}`);
+        } catch (e) {
+            console.warn('Could not update ledger note for changed bill number:', e);
+        }
     }
 
     // 2. Replace Bill Items in Supabase

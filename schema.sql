@@ -136,6 +136,7 @@ CREATE TABLE public.purchase_slips (
     invoice_date DATE,
     invoice_number TEXT,
     entry_date DATE,
+    payment_mode TEXT DEFAULT 'CASH',
     total_amount NUMERIC DEFAULT 0,
     created_by UUID REFERENCES public.owners(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
