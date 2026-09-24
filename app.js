@@ -491,9 +491,12 @@ async function sendBackgroundWhatsApp(bill, items) {
     msg += "*Items:*\n";
     items.forEach(i => {
         const qty = i.quantity || i.qty || 1;
+        const freeQty = parseInt(i.free_qty, 10) || 0;
+        const freeText = freeQty > 0 ? ` (+${freeQty} Free)` : '';
         const price = i.price || i.product?.price || 0;
         const pName = i.product_name || i.product?.name || 'Item';
-        msg += "- " + pName + " x" + qty + " = ₹" + (qty * price).toFixed(2) + "\n";
+        const hsnPrefix = (i.hsn_number || i.product?.hsn_number) ? `[HSN: ${i.hsn_number || i.product?.hsn_number}] ` : '';
+        msg += "- " + hsnPrefix + pName + " x" + qty + freeText + " = ₹" + (qty * price).toFixed(2) + "\n";
     });
     msg += "\n*Total: ₹" + (bill.final_amount || bill.subtotal || 0).toFixed(2) + "*\n";
     msg += "Mode: " + (bill.payment_mode || 'CASH') + "\n\n";
@@ -538,7 +541,10 @@ async function viewBillDetails(billId) {
 
     let msg = `Bill Items:\n`;
     items.forEach(i => {
-        msg += `- ${i.product_name} x${i.quantity} (₹${i.price})\n`;
+        const hsnPrefix = i.hsn_number ? `[HSN: ${i.hsn_number}] ` : '';
+        const freeQty = parseInt(i.free_qty, 10) || 0;
+        const freeText = freeQty > 0 ? ` (+${freeQty} Free)` : '';
+        msg += `- ${hsnPrefix}${i.product_name} x${i.quantity}${freeText} (₹${i.price})\n`;
     });
     alert(msg);
 }
@@ -578,7 +584,10 @@ async function sendWhatsAppReceipt(billId) {
 
     msg += `*Items:*\n`;
     items.forEach(i => {
-        msg += `- ${i.product_name} x${i.quantity} = ₹${(i.quantity * i.price).toFixed(2)}\n`;
+        const hsnPrefix = i.hsn_number ? `[HSN: ${i.hsn_number}] ` : '';
+        const freeQty = parseInt(i.free_qty, 10) || 0;
+        const freeText = freeQty > 0 ? ` (+${freeQty} Free)` : '';
+        msg += `- ${hsnPrefix}${i.product_name} x${i.quantity}${freeText} = ₹${(i.quantity * i.price).toFixed(2)}\n`;
     });
 
     msg += `\n*Total: ₹${bill.final_amount.toFixed(2)}*\n`;
@@ -595,6 +604,63 @@ async function sendWhatsAppReceipt(billId) {
     const waUrl = `https://wa.me/${phoneNum}?text=${encodeMsg}`;
 
     window.open(waUrl, '_blank');
+}
+
+// ==========================================
+// HSN NUMBER SYSTEM-WIDE AUTOFILL & CACHE
+// ==========================================
+const hsnCache = {
+    byUpc: {},
+    byName: {},
+    allHsns: new Set()
+};
+
+function updateHsnCache(upc, name, hsn) {
+    if (!hsn) return;
+    const cleanHsn = String(hsn).trim();
+    if (!cleanHsn) return;
+    hsnCache.allHsns.add(cleanHsn);
+    if (upc) {
+        const cleanUpc = String(upc).trim().toLowerCase();
+        if (cleanUpc) hsnCache.byUpc[cleanUpc] = cleanHsn;
+    }
+    if (name) {
+        const cleanName = String(name).trim().toLowerCase();
+        if (cleanName) hsnCache.byName[cleanName] = cleanHsn;
+    }
+    syncHsnDatalist();
+}
+
+function syncHsnDatalist() {
+    const datalist = document.getElementById('store-hsn-list');
+    if (!datalist) return;
+    let html = '';
+    hsnCache.allHsns.forEach(hsn => {
+        html += `<option value="${hsn}">`;
+    });
+    datalist.innerHTML = html;
+}
+
+function findHsnForProduct(upc, name) {
+    if (upc) {
+        const cleanUpc = String(upc).trim().toLowerCase();
+        if (hsnCache.byUpc[cleanUpc]) return hsnCache.byUpc[cleanUpc];
+        const prod = (appState.products || []).find(p => p.upc && String(p.upc).trim().toLowerCase() === cleanUpc && p.hsn_number);
+        if (prod && prod.hsn_number) {
+            updateHsnCache(prod.upc, prod.name, prod.hsn_number);
+            return prod.hsn_number;
+        }
+    }
+    if (name) {
+        const cleanName = String(name).trim().toLowerCase();
+        if (hsnCache.byName[cleanName]) return hsnCache.byName[cleanName];
+        const prod = (appState.products || []).find(p => p.name && String(p.name).trim().toLowerCase() === cleanName && p.hsn_number);
+        if (prod && prod.hsn_number) {
+            updateHsnCache(prod.upc, prod.name, prod.hsn_number);
+            return prod.hsn_number;
+        }
+    }
+    return '';
 }
 
 // ==========================================
@@ -628,7 +694,12 @@ async function loadInventory() {
         console.error('Error loading products:', prodError);
         alert('Failed to load products. Please reload.');
     }
-    else appState.products = products || [];
+    else {
+        appState.products = products || [];
+        (appState.products || []).forEach(p => {
+            if (p.hsn_number) updateHsnCache(p.upc, p.name, p.hsn_number);
+        });
+    }
 
     renderInventoryTabs();
     renderInventoryList();
@@ -711,7 +782,7 @@ function renderInventoryList() {
 
     if (query) {
         // Global Search (Starts With logic as requested)
-        filtered = appState.products.filter(p => p.name.toLowerCase().startsWith(query) || (p.upc && p.upc.toLowerCase().includes(query)));
+        filtered = appState.products.filter(p => p.name.toLowerCase().startsWith(query) || (p.upc && p.upc.toLowerCase().includes(query)) || (p.hsn_number && p.hsn_number.toLowerCase().includes(query)));
     } else {
         // Tab Filter
         filtered = appState.currentInventoryTab === 'all'
@@ -727,6 +798,8 @@ function renderInventoryList() {
     filtered.forEach(p => {
         const tabName = appState.tabs.find(t => t.id === p.tab_id)?.name || 'Uncategorized';
         const stockDisplay = p.is_in_house ? '<span style="color:var(--success-color); font-weight:600">Unlimited</span>' : p.stock;
+        const hsnSpan = p.hsn_number ? ` • HSN: <strong style="color:var(--text-primary);">${p.hsn_number}</strong>` : '';
+        const upcSpan = p.upc ? ` • UPC: ${p.upc}` : '';
 
         const item = document.createElement('div');
         item.className = 'inventory-item';
@@ -741,7 +814,7 @@ function renderInventoryList() {
                 ${imageHtml}
                 <div>
                     <h4>${p.name}</h4>
-                    <div class="item-meta">₹${p.price} • Stock: ${stockDisplay} • ${tabName}</div>
+                    <div class="item-meta">₹${p.price} • Stock: ${stockDisplay} • ${tabName}${hsnSpan}${upcSpan}</div>
                 </div>
             </div>
             <div class="item-actions">
@@ -913,6 +986,19 @@ function openAddProductModal() {
         select.appendChild(opt);
     });
 
+    const pName = document.getElementById('p-name');
+    if (pName) pName.value = '';
+    const pPrice = document.getElementById('p-price');
+    if (pPrice) pPrice.value = '';
+    const pStock = document.getElementById('p-stock');
+    if (pStock) pStock.value = '';
+    const pUpc = document.getElementById('p-upc');
+    if (pUpc) pUpc.value = '';
+    const pHsn = document.getElementById('p-hsn');
+    if (pHsn) pHsn.value = '';
+    const pHouse = document.getElementById('p-house');
+    if (pHouse) pHouse.checked = false;
+
     modalOverlay.classList.remove('hidden');
     document.getElementById('modal-add-product').classList.remove('hidden');
 
@@ -951,6 +1037,7 @@ function openEditProduct(productId) {
     document.getElementById('edit-p-price').value = product.price;
     document.getElementById('edit-p-stock').value = product.stock;
     document.getElementById('edit-p-upc').value = product.upc || '';
+    document.getElementById('edit-p-hsn').value = product.hsn_number || findHsnForProduct(product.upc, product.name) || '';
     document.getElementById('edit-p-house').checked = product.is_in_house;
 
     // Set initial visibility
@@ -966,11 +1053,6 @@ function openEditProduct(productId) {
         if (t.id === product.tab_id) opt.selected = true;
         select.appendChild(opt);
     });
-
-    // Handle existing image preview if needed? 
-    // For now, we only show cropper if NEW image selected.
-    // Maybe show current image?
-    // Not critical for MVP, user can just upload new one to replace.
 
     modalOverlay.classList.remove('hidden');
     document.getElementById('modal-edit-product').classList.remove('hidden');
@@ -1000,6 +1082,11 @@ document.getElementById('add-product-form').addEventListener('submit', async (e)
     const is_in_house = document.getElementById('p-house').checked;
     const stock = is_in_house ? 0 : (document.getElementById('p-stock').value || 0);
     const upc = document.getElementById('p-upc').value.trim() || null;
+    let hsn_number = document.getElementById('p-hsn').value.trim() || null;
+    if (!hsn_number) {
+        hsn_number = findHsnForProduct(upc, name) || null;
+    }
+    if (hsn_number) updateHsnCache(upc, name, hsn_number);
 
     let tab_id = document.getElementById('p-tab').value;
     if (tab_id === "") tab_id = null;
@@ -1016,6 +1103,7 @@ document.getElementById('add-product-form').addEventListener('submit', async (e)
             tab_id,
             is_in_house,
             upc,
+            hsn_number,
             tenant_id: authState.owner.tenant_id,
             image_data: image_data
         }]);
@@ -1036,11 +1124,16 @@ document.getElementById('edit-product-form').addEventListener('submit', async (e
     const is_in_house = document.getElementById('edit-p-house').checked;
     const stock = is_in_house ? 0 : (document.getElementById('edit-p-stock').value || 0);
     const upc = document.getElementById('edit-p-upc').value.trim() || null;
+    let hsn_number = document.getElementById('edit-p-hsn').value.trim() || null;
+    if (!hsn_number) {
+        hsn_number = findHsnForProduct(upc, name) || null;
+    }
+    if (hsn_number) updateHsnCache(upc, name, hsn_number);
 
     let tab_id = document.getElementById('edit-p-tab').value;
     if (tab_id === "") tab_id = null;
 
-    const updates = { name, price, stock, tab_id, is_in_house, upc };
+    const updates = { name, price, stock, tab_id, is_in_house, upc, hsn_number };
 
     // Only update image if changed
     const image_data = await getCompressedImage();
@@ -1060,6 +1153,68 @@ document.getElementById('edit-product-form').addEventListener('submit', async (e
         loadInventory();
     }
 });
+
+// Setup HSN auto-fill on Add Product modal
+const pUpcInput = document.getElementById('p-upc');
+const pNameInput = document.getElementById('p-name');
+const pHsnInput = document.getElementById('p-hsn');
+
+if (pUpcInput && pHsnInput) {
+    const handleUpcAutofill = () => {
+        const val = pUpcInput.value.trim();
+        if (!val) return;
+        const autoHsn = findHsnForProduct(val, pNameInput ? pNameInput.value : '');
+        if (autoHsn && !pHsnInput.value) {
+            pHsnInput.value = autoHsn;
+        }
+    };
+    pUpcInput.addEventListener('input', handleUpcAutofill);
+    pUpcInput.addEventListener('change', handleUpcAutofill);
+}
+
+if (pNameInput && pHsnInput) {
+    const handleNameAutofill = () => {
+        const val = pNameInput.value.trim();
+        if (!val) return;
+        const autoHsn = findHsnForProduct(pUpcInput ? pUpcInput.value : '', val);
+        if (autoHsn && !pHsnInput.value) {
+            pHsnInput.value = autoHsn;
+        }
+    };
+    pNameInput.addEventListener('input', handleNameAutofill);
+    pNameInput.addEventListener('change', handleNameAutofill);
+}
+
+// Setup HSN auto-fill on Edit Product modal
+const editPUpcInput = document.getElementById('edit-p-upc');
+const editPNameInput = document.getElementById('edit-p-name');
+const editPHsnInput = document.getElementById('edit-p-hsn');
+
+if (editPUpcInput && editPHsnInput) {
+    const handleEditUpcAutofill = () => {
+        const val = editPUpcInput.value.trim();
+        if (!val) return;
+        const autoHsn = findHsnForProduct(val, editPNameInput ? editPNameInput.value : '');
+        if (autoHsn && !editPHsnInput.value) {
+            editPHsnInput.value = autoHsn;
+        }
+    };
+    editPUpcInput.addEventListener('input', handleEditUpcAutofill);
+    editPUpcInput.addEventListener('change', handleEditUpcAutofill);
+}
+
+if (editPNameInput && editPHsnInput) {
+    const handleEditNameAutofill = () => {
+        const val = editPNameInput.value.trim();
+        if (!val) return;
+        const autoHsn = findHsnForProduct(editPUpcInput ? editPUpcInput.value : '', val);
+        if (autoHsn && !editPHsnInput.value) {
+            editPHsnInput.value = autoHsn;
+        }
+    };
+    editPNameInput.addEventListener('input', handleEditNameAutofill);
+    editPNameInput.addEventListener('change', handleEditNameAutofill);
+}
 
 // ==========================================
 // BILLING (POS)
@@ -1102,7 +1257,7 @@ function renderBilling() {
     if (searchInput) {
         const term = searchInput.value.toLowerCase();
         if (term) {
-            filtered = filtered.filter(p => p.name.toLowerCase().startsWith(term) || (p.upc && p.upc.toLowerCase().includes(term)));
+            filtered = filtered.filter(p => p.name.toLowerCase().startsWith(term) || (p.upc && p.upc.toLowerCase().includes(term)) || (p.hsn_number && p.hsn_number.toLowerCase().includes(term)));
         }
     }
 
@@ -1132,10 +1287,13 @@ function renderBilling() {
             stockInfo = `<span style="font-size:0.75rem; color:${color}; display:block; margin-bottom:0.25rem;">Stock: ${p.stock}</span>`;
         }
 
+        const hsnHtml = p.hsn_number ? `<span style="font-size:0.72rem; color:var(--text-secondary); display:block; margin-bottom:2px;">HSN: ${p.hsn_number}</span>` : '';
+
         card.innerHTML = `
             ${imageHtml}
             <div class="card-details">
                 <h4 title="${p.name}">${p.name}</h4>
+                ${hsnHtml}
                 ${stockInfo}
                 <div class="card-footer">
                     <span class="price">₹${p.price}</span>
@@ -1158,14 +1316,15 @@ function addToCart(productId) {
 
     const existing = appState.cart.find(item => item.product.id === productId);
     if (existing) {
-        // Check stock limit
-        if (existing.qty + 1 > product.stock && !product.is_in_house) {
+        // Check stock limit including free items
+        const currentFree = parseInt(existing.free_qty, 10) || 0;
+        if (existing.qty + currentFree + 1 > product.stock && !product.is_in_house) {
             alert('Stock limit reached for this bill');
             return;
         }
         existing.qty++;
     } else {
-        appState.cart.push({ product, qty: 1 });
+        appState.cart.push({ product, qty: 1, free_qty: 0 });
     }
     showToast("Product Added!");
     renderCart();
@@ -1219,15 +1378,20 @@ function renderCart() {
                 ? `<span style="color:#2563EB; font-weight:700;">₹${unitPrice}</span> <s style="font-size:0.75rem; color:#94A3B8;">₹${item.product.price}</s>`
                 : `₹${unitPrice}`;
 
+            const hsnPrefix = item.product.hsn_number ? `<span style="font-size:0.75rem; color:#64748b; font-weight:600;">[${item.product.hsn_number}] </span>` : '';
             const div = document.createElement('div');
             div.className = 'cart-item';
             div.innerHTML = `
-                <div class="cart-item-name" title="${item.product.name}">${item.product.name} (${priceHtml})</div>
+                <div class="cart-item-name" title="${item.product.name}">${hsnPrefix}${item.product.name} (${priceHtml})</div>
                 <div class="qty-controls">
                     <button class="special-price-btn ${isSpecial ? 'active' : ''}" onclick="editItemSpecialPrice(${index})" title="${isSpecial ? 'Special Price Active: ₹' + unitPrice + ' (Click to edit)' : 'Give Special Price'}">🏷️</button>
                     <button class="qty-btn" onclick="updateCartQty(${index}, -1)">-</button>
                     <input type="number" class="qty-input" min="1" value="${item.qty}" oninput="handleCartQtyInput(${index}, this)" onchange="handleCartQtyChange(${index}, this)" onfocus="this.select()" onkeydown="if(event.key==='Enter')this.blur()">
                     <button class="qty-btn" onclick="updateCartQty(${index}, 1)">+</button>
+                    <div class="free-controls" title="Free / Bonus Quantity">
+                        <span class="free-label">Free:</span>
+                        <input type="number" class="free-qty-input" min="0" placeholder="0" value="${item.free_qty || 0}" oninput="handleCartFreeQtyInput(${index}, this)" onchange="handleCartFreeQtyChange(${index}, this)" onfocus="this.select()" onkeydown="if(event.key==='Enter')this.blur()">
+                    </div>
                 </div>
                 <button class="remove-btn" onclick="removeFromCart(${index})">&times;</button>
             `;
@@ -1251,8 +1415,9 @@ function handleCartQtyInput(index, input) {
     if (isNaN(val) || val <= 0) {
         return;
     }
-    if (val > item.product.stock && !item.product.is_in_house) {
-        alert(`Cannot exceed available stock (${item.product.stock})`);
+    const freeVal = parseInt(item.free_qty, 10) || 0;
+    if (val + freeVal > item.product.stock && !item.product.is_in_house) {
+        alert(`Cannot exceed available stock (${item.product.stock}) including free items (${freeVal})`);
         input.value = item.qty;
         return;
     }
@@ -1267,12 +1432,13 @@ function handleCartQtyChange(index, input) {
     const item = appState.cart[index];
     if (!item) return;
     const val = parseInt(input.value, 10);
+    const freeVal = parseInt(item.free_qty, 10) || 0;
     if (isNaN(val) || val <= 0) {
         item.qty = 1;
         input.value = 1;
-    } else if (val > item.product.stock && !item.product.is_in_house) {
-        alert(`Cannot exceed available stock (${item.product.stock})`);
-        item.qty = Math.min(item.qty, item.product.stock);
+    } else if (val + freeVal > item.product.stock && !item.product.is_in_house) {
+        alert(`Cannot exceed available stock (${item.product.stock}) including free items (${freeVal})`);
+        item.qty = Math.max(1, item.product.stock - freeVal);
         input.value = item.qty;
     } else {
         item.qty = val;
@@ -1281,15 +1447,50 @@ function handleCartQtyChange(index, input) {
     renderCart();
 }
 
+function handleCartFreeQtyInput(index, input) {
+    const item = appState.cart[index];
+    if (!item) return;
+    const val = parseInt(input.value, 10);
+    if (isNaN(val) || val < 0) {
+        return;
+    }
+    if (item.qty + val > item.product.stock && !item.product.is_in_house) {
+        alert(`Cannot exceed available stock (${item.product.stock}). Current paid qty: ${item.qty}`);
+        input.value = item.free_qty || 0;
+        return;
+    }
+    item.free_qty = val;
+}
+
+function handleCartFreeQtyChange(index, input) {
+    const item = appState.cart[index];
+    if (!item) return;
+    const val = parseInt(input.value, 10);
+    if (isNaN(val) || val < 0) {
+        item.free_qty = 0;
+        input.value = 0;
+    } else if (item.qty + val > item.product.stock && !item.product.is_in_house) {
+        alert(`Cannot exceed available stock (${item.product.stock}). Current paid qty: ${item.qty}`);
+        const maxFree = Math.max(0, item.product.stock - item.qty);
+        item.free_qty = maxFree;
+        input.value = maxFree;
+    } else {
+        item.free_qty = val;
+        input.value = val;
+    }
+    renderCart();
+}
+
 function updateCartQty(index, delta) {
     const item = appState.cart[index];
     const newQty = item.qty + delta;
+    const freeVal = parseInt(item.free_qty, 10) || 0;
 
     if (newQty <= 0) {
         removeFromCart(index);
     } else {
-        if (newQty > item.product.stock && !item.product.is_in_house) {
-            alert('Cannot exceed available stock');
+        if (newQty + freeVal > item.product.stock && !item.product.is_in_house) {
+            alert('Cannot exceed available stock including free items');
             return;
         }
         item.qty = newQty;
@@ -1446,7 +1647,9 @@ async function generateBill() {
         bill_id: billId,
         product_id: item.product.id,
         product_name: item.product.name,
+        hsn_number: item.product.hsn_number || findHsnForProduct(item.product.upc, item.product.name) || null,
         quantity: item.qty,
+        free_qty: parseInt(item.free_qty, 10) || 0,
         price: getItemUnitPrice(item),
         tenant_id: authState.owner.tenant_id
     }));
@@ -1456,10 +1659,13 @@ async function generateBill() {
     const insertItemsPromise = supabase.from('bill_items').insert(itemsToInsert);
 
     // 3. Update Stock (Ignore for In-house) - BACKGROUND TASK
+    // Deduct both paid quantity and free quantity from inventory
     const stockUpdatePromises = [];
     for (const item of appState.cart) {
         if (!item.product.is_in_house) {
-            const newStock = item.product.stock - item.qty;
+            const freeQty = parseInt(item.free_qty, 10) || 0;
+            const totalDeduction = item.qty + freeQty;
+            const newStock = item.product.stock - totalDeduction;
             stockUpdatePromises.push(
                 supabase.from('products').update({ stock: newStock }).eq('id', item.product.id)
             );
@@ -1467,10 +1673,18 @@ async function generateBill() {
     }
 
     // Execute concurrently
-    const [{ error: itemsError }] = await Promise.all([
+    let [{ error: itemsError }] = await Promise.all([
         insertItemsPromise,
         ...stockUpdatePromises
     ]);
+
+    // Resilient fallback if bill_items table doesn't have free_qty column yet in remote DB
+    if (itemsError && itemsError.message && itemsError.message.includes('free_qty')) {
+        console.warn('bill_items free_qty column not found in database. Retrying insert without free_qty column...');
+        const fallbackItems = itemsToInsert.map(({ free_qty, ...rest }) => rest);
+        const retryRes = await supabase.from('bill_items').insert(fallbackItems);
+        itemsError = retryRes.error;
+    }
 
     if (itemsError) {
         console.error('Error saving items', itemsError);
@@ -1580,6 +1794,8 @@ function showBillPreview(bill, items) {
     const billDisplay = bill.bill_number || bill.id.slice(0, 8);
 
     
+    const hasFreeItems = items.some(item => (parseInt(item.free_qty, 10) || 0) > 0);
+    
     let html = '';
 
     if (billFormat === 'A4') {
@@ -1591,6 +1807,7 @@ function showBillPreview(bill, items) {
         items.forEach((item, index) => {
             const mrp = item.price;
             const qty = item.quantity;
+            const freeQty = parseInt(item.free_qty, 10) || 0;
             const baseRate = mrp / 1.05;
             const cgstAmt = baseRate * 0.025 * qty;
             const sgstAmt = baseRate * 0.025 * qty;
@@ -1601,15 +1818,22 @@ function showBillPreview(bill, items) {
             totalSgst += sgstAmt;
             totalBaseAmount += baseAmt;
 
+            const hsnVal = item.hsn_number || '-';
+            const freeCell = hasFreeItems
+                ? `<td style="text-align:center;width:45px;color:#059669;font-weight:600;">${freeQty > 0 ? freeQty : '-'}</td>`
+                : '';
+
             itemsHtml += `
               <tr>
                 <td style="text-align:center;width:36px;">${index + 1}</td>
+                <td style="text-align:center;width:${hasFreeItems ? 85 : 90}px;font-family:monospace;font-size:11px;color:#333;">${hsnVal}</td>
                 <td style="text-align:left;">${item.product_name}</td>
-                <td style="text-align:center;width:44px;">${qty}</td>
-                <td style="text-align:right;width:80px;">${baseRate.toFixed(2)}</td>
-                <td style="text-align:right;width:80px;">${cgstAmt.toFixed(2)}</td>
-                <td style="text-align:right;width:80px;">${sgstAmt.toFixed(2)}</td>
-                <td style="text-align:right;width:90px;font-weight:600;">${lineTotal.toFixed(2)}</td>
+                <td style="text-align:center;width:${hasFreeItems ? 40 : 44}px;">${qty}</td>
+                ${freeCell}
+                <td style="text-align:right;width:${hasFreeItems ? 78 : 80}px;">${baseRate.toFixed(2)}</td>
+                <td style="text-align:right;width:${hasFreeItems ? 78 : 80}px;">${cgstAmt.toFixed(2)}</td>
+                <td style="text-align:right;width:${hasFreeItems ? 78 : 80}px;">${sgstAmt.toFixed(2)}</td>
+                <td style="text-align:right;width:${hasFreeItems ? 88 : 90}px;font-weight:600;">${lineTotal.toFixed(2)}</td>
               </tr>
             `;
         });
@@ -1852,8 +2076,34 @@ function showBillPreview(bill, items) {
             </div>
 
             <table class="a4-table">
+                ${hasFreeItems ? `
                 <colgroup>
                     <col style="width:36px;">
+                    <col style="width:85px;">
+                    <col>
+                    <col style="width:40px;">
+                    <col style="width:45px;">
+                    <col style="width:78px;">
+                    <col style="width:78px;">
+                    <col style="width:78px;">
+                    <col style="width:88px;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th style="text-align:center;">#</th>
+                        <th style="text-align:center;">HSN</th>
+                        <th style="text-align:left;">Item Description</th>
+                        <th style="text-align:center;">Qty</th>
+                        <th style="text-align:center;">Free</th>
+                        <th style="text-align:right;">Rate (₹)</th>
+                        <th style="text-align:right;">CGST (₹)<small>@ 2.5%</small></th>
+                        <th style="text-align:right;">SGST (₹)<small>@ 2.5%</small></th>
+                        <th style="text-align:right;">Total (₹)</th>
+                    </tr>
+                </thead>` : `
+                <colgroup>
+                    <col style="width:36px;">
+                    <col style="width:90px;">
                     <col>
                     <col style="width:44px;">
                     <col style="width:82px;">
@@ -1864,6 +2114,7 @@ function showBillPreview(bill, items) {
                 <thead>
                     <tr>
                         <th style="text-align:center;">#</th>
+                        <th style="text-align:center;">HSN</th>
                         <th style="text-align:left;">Item Description</th>
                         <th style="text-align:center;">Qty</th>
                         <th style="text-align:right;">Rate (₹)</th>
@@ -1871,7 +2122,7 @@ function showBillPreview(bill, items) {
                         <th style="text-align:right;">SGST (₹)<small>@ 2.5%</small></th>
                         <th style="text-align:right;">Total (₹)</th>
                     </tr>
-                </thead>
+                </thead>`}
                 <tbody>
                     ${itemsHtml}
                 </tbody>
@@ -1890,11 +2141,17 @@ function showBillPreview(bill, items) {
         let itemsHtml = '';
         items.forEach((item, index) => {
             const lineTotal = item.quantity * item.price;
+            const hsnPrefix = item.hsn_number ? `[${item.hsn_number}] ` : '';
+            const freeQty = parseInt(item.free_qty, 10) || 0;
+            const freeCell = hasFreeItems
+                ? `<span class="free-col">${freeQty > 0 ? freeQty : '-'}</span>`
+                : '';
             itemsHtml += `
               <div class="row">
                 <span class="sno">${index + 1}</span>
-                <span class="item">${item.product_name}</span>
+                <span class="item">${hsnPrefix}${item.product_name}</span>
                 <span class="qty">${item.quantity}</span>
+                ${freeCell}
                 <span class="amt">${lineTotal.toFixed(2)}</span>
               </div>
             `;
@@ -1949,10 +2206,11 @@ function showBillPreview(bill, items) {
                 .divider { border-top: 1px dashed #000; margin: 4px 0; }
                 .row { display: flex; }
                 
-                /* Column Widths Update: S.No (3mm), Item (Flex), Qty (4mm), Amt (14mm) */
+                /* Column Widths: S.No (3mm), Item (Flex), Qty (7mm), Free (7mm optional), Amt (14mm) */
                 .sno { width: 3mm; flex-shrink: 0; text-align: left; }
                 .item { flex: 1; padding-left: 1mm; overflow-x: hidden; }
                 .qty { width: 7mm; text-align: center; flex-shrink: 0; }
+                .free-col { width: 7mm; text-align: center; flex-shrink: 0; color: #059669; }
                 .amt { width: 14mm; text-align: right; flex-shrink: 0; }
                 
                 .total { font-size: 14px; font-weight: bold; }
@@ -2062,6 +2320,7 @@ function showBillPreview(bill, items) {
                 <span class="sno">#</span>
                 <span class="item">ITEM</span>
                 <span class="qty">Qty</span>
+                ${hasFreeItems ? '<span class="free-col">Free</span>' : ''}
                 <span class="amt">AMT</span>
               </div>
 
@@ -2432,13 +2691,14 @@ async function loadDashboardInventory() {
         if (supabase && window.authState && window.authState.owner) {
             const { data, error } = await supabase
                 .from('purchase_slip_items')
-                .select('product_name, upc, created_at, purchase_slips(invoice_date, entry_date, created_at)')
+                .select('product_name, upc, hsn_number, created_at, purchase_slips(invoice_date, entry_date, created_at)')
                 .eq('tenant_id', authState.owner.tenant_id)
                 .order('created_at', { ascending: false });
 
             if (!error && data) {
                 const map = {};
                 data.forEach(item => {
+                    if (item.hsn_number) updateHsnCache(item.upc, item.product_name, item.hsn_number);
                     const slipDate = item.purchase_slips?.invoice_date || item.purchase_slips?.entry_date || item.created_at;
                     if (item.upc && !map[`upc_${item.upc.trim()}`]) {
                         map[`upc_${item.upc.trim()}`] = slipDate;
@@ -2474,7 +2734,8 @@ function renderDashboardInventory() {
     if (query) {
         filtered = products.filter(p => 
             (p.name && p.name.toLowerCase().includes(query)) ||
-            (p.upc && p.upc.toLowerCase().includes(query))
+            (p.upc && p.upc.toLowerCase().includes(query)) ||
+            (p.hsn_number && p.hsn_number.toLowerCase().includes(query))
         );
     }
 
@@ -2535,7 +2796,10 @@ function renderDashboardInventory() {
                         ${imgTag}
                         <div>
                             <div style="font-weight: 600; color: var(--text-primary);">${p.name}</div>
-                            ${tabName ? `<span style="font-size: 0.75rem; color: var(--text-secondary);">${tabName}</span>` : ''}
+                            <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
+                                ${tabName ? `<span style="font-size: 0.75rem; color: var(--text-secondary);">${tabName}</span>` : ''}
+                                ${p.hsn_number ? `<span style="font-size: 0.72rem; background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 1px 5px; border-radius: 4px; font-weight: 500;">HSN: ${p.hsn_number}</span>` : ''}
+                            </div>
                         </div>
                     </div>
                 </td>
@@ -4800,13 +5064,13 @@ document.getElementById('undo-bill-form').addEventListener('submit', async (e) =
     // 2. Fetch bill items
     const { data: items, error: itemsError } = await supabase
         .from('bill_items')
-        .select('product_id, quantity, products(is_in_house)')
+        .select('product_id, quantity, free_qty, products(is_in_house)')
         .eq('bill_id', billId);
         
     if (itemsError) {
         console.error('Failed to fetch bill items for undo:', itemsError);
     } else if (items) {
-        // 3. Revert Stock for non-in-house products
+        // 3. Revert Stock for non-in-house products (paid qty + free qty)
         for (const item of items) {
             if (item.product_id && item.products && !item.products.is_in_house) {
                 const { data: prod } = await supabase
@@ -4816,9 +5080,10 @@ document.getElementById('undo-bill-form').addEventListener('submit', async (e) =
                     .single();
                     
                 if (prod) {
+                    const returnedQty = (Number(item.quantity) || 0) + (Number(item.free_qty) || 0);
                     await supabase
                         .from('products')
-                        .update({ stock: prod.stock + item.quantity })
+                        .update({ stock: prod.stock + returnedQty })
                         .eq('id', item.product_id);
                 }
             }
@@ -4917,7 +5182,9 @@ async function openEditBillModal(billId) {
             id: item.id,
             product_id: item.product_id,
             product_name: item.product_name,
+            hsn_number: item.hsn_number || '',
             quantity: Number(item.quantity) || 1,
+            free_qty: Number(item.free_qty) || 0,
             price: Number(item.price) || 0
         }));
 
@@ -4971,7 +5238,7 @@ function populateEditBillProductDropdown() {
     prodSelect.innerHTML = '<option value="">-- Select product to add to bill --</option>';
     if (appState.products && appState.products.length > 0) {
         appState.products.forEach(p => {
-            prodSelect.innerHTML += `<option value="${p.id}">${p.name} (₹${Number(p.price).toFixed(2)})</option>`;
+            prodSelect.innerHTML += `<option value="${p.id}">${p.name} (₹${Number(p.price).toFixed(2)})${p.hsn_number ? ' [HSN: ' + p.hsn_number + ']' : ''}</option>`;
         });
     }
 }
@@ -4981,7 +5248,7 @@ function renderEditBillItems() {
     if (!tbody) return;
 
     if (!editBillState.items || editBillState.items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 16px; color: #888;">No items in this bill. Select a product below to add items.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 16px; color: #888;">No items in this bill. Select a product below to add items.</td></tr>`;
         return;
     }
 
@@ -4990,17 +5257,20 @@ function renderEditBillItems() {
         const lineTotal = (item.quantity * item.price).toFixed(2);
         html += `
             <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="padding: 8px;">${index + 1}</td>
-                <td style="padding: 8px; font-weight: 600; min-width: 120px;">${item.product_name}</td>
+                <td style="padding: 8px;">${ index + 1}</td>
+                <td style="padding: 8px; font-weight: 600; min-width: 120px;">${item.product_name}${item.hsn_number ? '<div style="font-size:0.75rem;color:var(--text-secondary);font-weight:400;">HSN: ' + item.hsn_number + '</div>' : ''}</td>
                 <td style="padding: 8px;">
                     <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: var(--bg-surface);">
                         <button type="button" onclick="editBillChangeQty(${index}, -1)" style="padding: 4px 8px; border: none; background: var(--bg-body); cursor: pointer; font-weight: bold; font-size: 1rem; color: var(--text-primary);">-</button>
-                        <input type="number" min="1" value="${item.quantity}" style="width: 45px; text-align: center; border: none; padding: 4px 2px; font-weight: 600; background: transparent; color: var(--text-primary);" oninput="editBillUpdateItemQty(${index}, this.value)" onchange="editBillUpdateItemQty(${index}, this.value)">
+                        <input type="number" min="1" value="${item.quantity}" style="width: 40px; text-align: center; border: none; padding: 4px 2px; font-weight: 600; background: transparent; color: var(--text-primary);" oninput="editBillUpdateItemQty(${index}, this.value)" onchange="editBillUpdateItemQty(${index}, this.value)">
                         <button type="button" onclick="editBillChangeQty(${index}, 1)" style="padding: 4px 8px; border: none; background: var(--bg-body); cursor: pointer; font-weight: bold; font-size: 1rem; color: var(--text-primary);">+</button>
                     </div>
                 </td>
                 <td style="padding: 8px;">
-                    <input type="number" min="0" step="0.01" value="${item.price}" style="width: 85px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-surface); color: var(--text-primary);" oninput="editBillUpdateItemPrice(${index}, this.value)" onchange="editBillUpdateItemPrice(${index}, this.value)">
+                    <input type="number" min="0" value="${item.free_qty || 0}" style="width: 55px; padding: 5px; border: 1px solid #10b981; border-radius: 6px; background: #ecfdf5; color: #065f46; font-weight: 600; text-align: center;" oninput="editBillUpdateItemFreeQty(${index}, this.value)" onchange="editBillUpdateItemFreeQty(${index}, this.value)">
+                </td>
+                <td style="padding: 8px;">
+                    <input type="number" min="0" step="0.01" value="${item.price}" style="width: 80px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-surface); color: var(--text-primary);" oninput="editBillUpdateItemPrice(${index}, this.value)" onchange="editBillUpdateItemPrice(${index}, this.value)">
                 </td>
                 <td id="edit-bill-item-total-${index}" style="padding: 8px; text-align: right; font-weight: 700; color: var(--primary-color);">₹${lineTotal}</td>
                 <td style="padding: 8px; text-align: center;">
@@ -5053,6 +5323,16 @@ function editBillUpdateItemPrice(index, newPrice) {
     updateEditBillTotals();
 }
 
+function editBillUpdateItemFreeQty(index, newFreeQty) {
+    if (!editBillState.items[index]) return;
+    const free = parseInt(newFreeQty, 10);
+    if (isNaN(free) || free < 0) {
+        editBillState.items[index].free_qty = 0;
+    } else {
+        editBillState.items[index].free_qty = free;
+    }
+}
+
 function editBillRemoveItem(index) {
     editBillState.items.splice(index, 1);
     renderEditBillItems();
@@ -5074,7 +5354,9 @@ function editBillAddItem() {
         editBillState.items.push({
             product_id: prod.id,
             product_name: prod.name,
+            hsn_number: prod.hsn_number || findHsnForProduct(prod.upc, prod.name) || '',
             quantity: 1,
+            free_qty: 0,
             price: Number(prod.price) || 0
         });
     }
@@ -5231,14 +5513,22 @@ document.getElementById('edit-bill-form')?.addEventListener('submit', async (e) 
         bill_id: billId,
         product_id: item.product_id || null,
         product_name: item.product_name,
+        hsn_number: item.hsn_number || null,
         quantity: item.quantity,
+        free_qty: parseInt(item.free_qty, 10) || 0,
         price: item.price,
         tenant_id: tenantId
     }));
 
-    const { error: insertError } = await supabase
+    let { error: insertError } = await supabase
         .from('bill_items')
         .insert(newItemsPayload);
+
+    if (insertError && insertError.message && insertError.message.includes('free_qty')) {
+        const fallbackItems = newItemsPayload.map(({ free_qty, ...rest }) => rest);
+        const retryRes = await supabase.from('bill_items').insert(fallbackItems);
+        insertError = retryRes.error;
+    }
 
     if (insertError) {
         console.error('Error inserting updated bill items:', insertError);
@@ -5780,10 +6070,12 @@ function initEditPurchaseAutocomplete() {
                 matches.forEach(p => {
                     const div = document.createElement('div');
                     div.className = 'suggestion-item';
-                    div.innerHTML = `<strong>${p.name}</strong><br><small style="color:var(--text-secondary);">UPC: ${p.upc || 'N/A'} • Selling: ₹${p.price}</small>`;
+                    div.innerHTML = `<strong>${p.name}</strong><br><small style="color:var(--text-secondary);">UPC: ${p.upc || 'N/A'}${p.hsn_number ? ' • HSN: ' + p.hsn_number : ''} • Selling: ₹${p.price}</small>`;
                     div.onclick = () => {
                         upcInput.value = p.upc || '';
                         nameInput.value = p.name || '';
+                        const hsnInput = document.getElementById('edit-purchase-new-hsn');
+                        if (hsnInput) hsnInput.value = p.hsn_number || findHsnForProduct(p.upc, p.name) || '';
                         document.getElementById('edit-purchase-new-selling-price').value = p.price || 0;
                         upcSuggestions.classList.add('hidden');
                     };
@@ -5792,6 +6084,33 @@ function initEditPurchaseAutocomplete() {
                 upcSuggestions.classList.remove('hidden');
             } else {
                 upcSuggestions.classList.add('hidden');
+            }
+
+            // Quick exact match autofill on input
+            const exact = (appState.products || []).find(p => p.upc && p.upc.toLowerCase() === query);
+            const hsnInput = document.getElementById('edit-purchase-new-hsn');
+            if (exact) {
+                if (hsnInput && !hsnInput.value) hsnInput.value = exact.hsn_number || findHsnForProduct(exact.upc, exact.name) || '';
+            } else {
+                const autoHsn = findHsnForProduct(query, nameInput ? nameInput.value : '');
+                if (hsnInput && autoHsn && !hsnInput.value) hsnInput.value = autoHsn;
+            }
+        });
+
+        // Exact match check on change (e.g. from barcode scanner)
+        upcInput.addEventListener('change', () => {
+            const val = upcInput.value.trim();
+            if (!val) return;
+            const exact = (appState.products || []).find(p => p.upc && p.upc.toLowerCase() === val.toLowerCase());
+            const hsnInput = document.getElementById('edit-purchase-new-hsn');
+            if (exact) {
+                if (!nameInput.value) nameInput.value = exact.name || '';
+                if (hsnInput) hsnInput.value = exact.hsn_number || findHsnForProduct(exact.upc, exact.name) || '';
+                const spInput = document.getElementById('edit-purchase-new-selling-price');
+                if (spInput && (!spInput.value || spInput.value === '0')) spInput.value = exact.price || 0;
+            } else {
+                const autoHsn = findHsnForProduct(val, nameInput ? nameInput.value : '');
+                if (hsnInput && autoHsn && !hsnInput.value) hsnInput.value = autoHsn;
             }
         });
     }
@@ -5809,10 +6128,12 @@ function initEditPurchaseAutocomplete() {
                 matches.forEach(p => {
                     const div = document.createElement('div');
                     div.className = 'suggestion-item';
-                    div.innerHTML = `<strong>${p.name}</strong><br><small style="color:var(--text-secondary);">UPC: ${p.upc || 'N/A'} • Selling: ₹${p.price}</small>`;
+                    div.innerHTML = `<strong>${p.name}</strong><br><small style="color:var(--text-secondary);">UPC: ${p.upc || 'N/A'}${p.hsn_number ? ' • HSN: ' + p.hsn_number : ''} • Selling: ₹${p.price}</small>`;
                     div.onclick = () => {
                         nameInput.value = p.name || '';
                         upcInput.value = p.upc || '';
+                        const hsnInput = document.getElementById('edit-purchase-new-hsn');
+                        if (hsnInput) hsnInput.value = p.hsn_number || findHsnForProduct(p.upc, p.name) || '';
                         document.getElementById('edit-purchase-new-selling-price').value = p.price || 0;
                         nameSuggestions.classList.add('hidden');
                     };
@@ -5821,6 +6142,33 @@ function initEditPurchaseAutocomplete() {
                 nameSuggestions.classList.remove('hidden');
             } else {
                 nameSuggestions.classList.add('hidden');
+            }
+
+            // Quick exact match autofill on input
+            const exact = (appState.products || []).find(p => p.name && p.name.toLowerCase() === query);
+            const hsnInput = document.getElementById('edit-purchase-new-hsn');
+            if (exact) {
+                if (hsnInput && !hsnInput.value) hsnInput.value = exact.hsn_number || findHsnForProduct(exact.upc, exact.name) || '';
+            } else {
+                const autoHsn = findHsnForProduct(upcInput ? upcInput.value : '', query);
+                if (hsnInput && autoHsn && !hsnInput.value) hsnInput.value = autoHsn;
+            }
+        });
+
+        // Exact match check on change
+        nameInput.addEventListener('change', () => {
+            const val = nameInput.value.trim();
+            if (!val) return;
+            const exact = (appState.products || []).find(p => p.name && p.name.toLowerCase() === val.toLowerCase());
+            const hsnInput = document.getElementById('edit-purchase-new-hsn');
+            if (exact) {
+                if (!upcInput.value) upcInput.value = exact.upc || '';
+                if (hsnInput) hsnInput.value = exact.hsn_number || findHsnForProduct(exact.upc, exact.name) || '';
+                const spInput = document.getElementById('edit-purchase-new-selling-price');
+                if (spInput && (!spInput.value || spInput.value === '0')) spInput.value = exact.price || 0;
+            } else {
+                const autoHsn = findHsnForProduct(upcInput ? upcInput.value : '', val);
+                if (hsnInput && autoHsn && !hsnInput.value) hsnInput.value = autoHsn;
             }
         });
     }
@@ -5856,6 +6204,7 @@ async function openEditPurchaseModal(slipId) {
             id: item.id || ('item_' + Math.random()),
             upc: item.upc || '',
             product_name: item.product_name || '',
+            hsn_number: item.hsn_number || '',
             bought_qty: Number(item.bought_qty) || 0,
             free_qty: Number(item.free_qty) || 0,
             total_qty: (Number(item.bought_qty) || 0) + (Number(item.free_qty) || 0),
@@ -5884,6 +6233,7 @@ async function openEditPurchaseModal(slipId) {
         // Reset new item inputs
         document.getElementById('edit-purchase-new-name').value = '';
         document.getElementById('edit-purchase-new-upc').value = '';
+        document.getElementById('edit-purchase-new-hsn').value = '';
         document.getElementById('edit-purchase-new-bought-qty').value = '1';
         document.getElementById('edit-purchase-new-free-qty').value = '0';
         document.getElementById('edit-purchase-new-bought-price').value = '0';
@@ -5920,7 +6270,7 @@ function renderEditPurchaseItems() {
                 <td style="padding: 6px 8px;">${index + 1}</td>
                 <td style="padding: 6px 8px; font-weight: 600;">
                     <div>${item.product_name}</div>
-                    <small style="color:var(--text-secondary); font-size:0.75rem;">${item.upc ? 'UPC: ' + item.upc : 'No UPC'}</small>
+                    <small style="color:var(--text-secondary); font-size:0.75rem;">${item.upc ? 'UPC: ' + item.upc : 'No UPC'}${item.hsn_number ? ' | HSN: ' + item.hsn_number : ''}</small>
                 </td>
                 <td style="padding: 6px 8px;">
                     <input type="number" min="0" value="${item.bought_qty}" style="width:65px; padding:3px; border:1px solid var(--border-color); border-radius:4px; font-size:0.85rem;" oninput="editPurchaseUpdateItemField(${index}, 'bought_qty', this.value)">
@@ -5976,6 +6326,11 @@ function editPurchaseRemoveItem(index) {
 function editPurchaseAddNewItem() {
     const name = (document.getElementById('edit-purchase-new-name').value || '').trim();
     const upc = (document.getElementById('edit-purchase-new-upc').value || '').trim();
+    let hsn = (document.getElementById('edit-purchase-new-hsn').value || '').trim();
+    if (!hsn) {
+        hsn = findHsnForProduct(upc, name);
+    }
+    if (hsn) updateHsnCache(upc, name, hsn);
     const boughtQty = parseInt(document.getElementById('edit-purchase-new-bought-qty').value, 10) || 0;
     const freeQty = parseInt(document.getElementById('edit-purchase-new-free-qty').value, 10) || 0;
     const boughtPrice = parseFloat(document.getElementById('edit-purchase-new-bought-price').value) || 0;
@@ -5999,6 +6354,7 @@ function editPurchaseAddNewItem() {
         id: 'new_item_' + Date.now(),
         upc,
         product_name: name,
+        hsn_number: hsn,
         bought_qty: boughtQty,
         free_qty: freeQty,
         total_qty: totalQty,
@@ -6012,6 +6368,7 @@ function editPurchaseAddNewItem() {
     // Reset inputs
     document.getElementById('edit-purchase-new-name').value = '';
     document.getElementById('edit-purchase-new-upc').value = '';
+    document.getElementById('edit-purchase-new-hsn').value = '';
     document.getElementById('edit-purchase-new-bought-qty').value = '1';
     document.getElementById('edit-purchase-new-free-qty').value = '0';
     document.getElementById('edit-purchase-new-bought-price').value = '0';
@@ -6172,6 +6529,7 @@ document.getElementById('edit-purchase-form')?.addEventListener('submit', async 
             tenant_id: authState.owner.tenant_id,
             upc: i.upc || null,
             product_name: i.product_name,
+            hsn_number: i.hsn_number || null,
             bought_qty: i.bought_qty,
             free_qty: i.free_qty,
             total_qty: i.total_qty,
@@ -6198,6 +6556,7 @@ document.getElementById('edit-purchase-form')?.addEventListener('submit', async 
                 const updatedStock = (matchedProduct.stock || 0) + item.total_qty;
                 const updateProdPayload = { stock: updatedStock };
                 if (item.selling_price > 0) updateProdPayload.price = item.selling_price;
+                if (item.hsn_number) updateProdPayload.hsn_number = item.hsn_number;
                 
                 await supabase.from('products').update(updateProdPayload).eq('id', matchedProduct.id);
                 matchedProduct.stock = updatedStock;
@@ -6207,6 +6566,7 @@ document.getElementById('edit-purchase-form')?.addEventListener('submit', async 
                     tenant_id: authState.owner.tenant_id,
                     name: item.product_name,
                     upc: item.upc,
+                    hsn_number: item.hsn_number || null,
                     price: item.selling_price || item.bought_price || 0,
                     stock: item.total_qty,
                     is_in_house: false
@@ -6317,7 +6677,7 @@ function initPurchases() {
                     div.innerHTML = `
                         <strong>${p.name}</strong>
                         <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
-                            <span>UPC: <strong style="color:var(--primary-color);">${p.upc || 'N/A'}</strong></span>
+                            <span>UPC: <strong style="color:var(--primary-color);">${p.upc || 'N/A'}</strong>${p.hsn_number ? ' • HSN: ' + p.hsn_number : ''}</span>
                             <span>Selling: ₹${p.price} • Stock: ${p.is_in_house ? 'Unlimited' : p.stock}</span>
                         </div>
                     `;
@@ -6330,6 +6690,16 @@ function initPurchases() {
             } else {
                 upcSuggestions.classList.add('hidden');
             }
+
+            // Quick exact match autofill on input
+            const exact = (appState.products || []).find(p => p.upc && p.upc.toLowerCase() === query);
+            const hsnInput = document.getElementById('purchase-item-hsn');
+            if (exact) {
+                if (hsnInput && !hsnInput.value) hsnInput.value = exact.hsn_number || findHsnForProduct(exact.upc, exact.name) || '';
+            } else {
+                const autoHsn = findHsnForProduct(query, nameInput ? nameInput.value : '');
+                if (hsnInput && autoHsn && !hsnInput.value) hsnInput.value = autoHsn;
+            }
         });
 
         // Exact match check on change (e.g. from barcode scanner)
@@ -6339,6 +6709,10 @@ function initPurchases() {
             const exact = (appState.products || []).find(p => p.upc && p.upc.toLowerCase() === val.toLowerCase());
             if (exact) {
                 selectProductForPurchase(exact);
+            } else {
+                const autoHsn = findHsnForProduct(val, nameInput ? nameInput.value : '');
+                const hsnInput = document.getElementById('purchase-item-hsn');
+                if (hsnInput && autoHsn && !hsnInput.value) hsnInput.value = autoHsn;
             }
         });
     }
@@ -6369,7 +6743,7 @@ function initPurchases() {
                     div.innerHTML = `
                         <strong>${p.name}</strong>
                         <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
-                            <span>${p.upc ? 'UPC: ' + p.upc : 'No UPC'}</span>
+                            <span>${p.upc ? 'UPC: ' + p.upc : 'No UPC'}${p.hsn_number ? ' • HSN: ' + p.hsn_number : ''}</span>
                             <span>Selling: ₹${p.price} • Stock: ${p.is_in_house ? 'Unlimited' : p.stock}</span>
                         </div>
                     `;
@@ -6381,6 +6755,30 @@ function initPurchases() {
                 nameSuggestions.classList.remove('hidden');
             } else {
                 nameSuggestions.classList.add('hidden');
+            }
+
+            // Quick exact match autofill on input
+            const exact = (appState.products || []).find(p => p.name && p.name.toLowerCase() === query);
+            const hsnInput = document.getElementById('purchase-item-hsn');
+            if (exact) {
+                if (hsnInput && !hsnInput.value) hsnInput.value = exact.hsn_number || findHsnForProduct(exact.upc, exact.name) || '';
+            } else {
+                const autoHsn = findHsnForProduct(upcInput ? upcInput.value : '', query);
+                if (hsnInput && autoHsn && !hsnInput.value) hsnInput.value = autoHsn;
+            }
+        });
+
+        // Exact match check on change
+        nameInput.addEventListener('change', () => {
+            const val = nameInput.value.trim();
+            if (!val) return;
+            const exact = (appState.products || []).find(p => p.name && p.name.toLowerCase() === val.toLowerCase());
+            if (exact) {
+                selectProductForPurchase(exact);
+            } else {
+                const autoHsn = findHsnForProduct(upcInput ? upcInput.value : '', val);
+                const hsnInput = document.getElementById('purchase-item-hsn');
+                if (hsnInput && autoHsn && !hsnInput.value) hsnInput.value = autoHsn;
             }
         });
     }
@@ -6416,6 +6814,8 @@ function selectProductForPurchase(product) {
 
     if (upcInput) upcInput.value = product.upc || '';
     if (nameInput) nameInput.value = product.name || '';
+    const hsnInput = document.getElementById('purchase-item-hsn');
+    if (hsnInput) hsnInput.value = product.hsn_number || findHsnForProduct(product.upc, product.name) || '';
     if (sellingPriceInput && (product.price !== undefined && product.price !== null)) {
         sellingPriceInput.value = product.price;
     }
@@ -6461,6 +6861,11 @@ function updatePurchaseItemCalc() {
 function addPurchaseItem() {
     const upc = (document.getElementById('purchase-item-upc').value || '').trim();
     const name = (document.getElementById('purchase-item-name').value || '').trim();
+    let hsn = (document.getElementById('purchase-item-hsn').value || '').trim();
+    if (!hsn) {
+        hsn = findHsnForProduct(upc, name);
+    }
+    if (hsn) updateHsnCache(upc, name, hsn);
     const boughtQty = parseInt(document.getElementById('purchase-item-bought-qty').value) || 0;
     const freeQty = parseInt(document.getElementById('purchase-item-free-qty').value) || 0;
     const expiryDate = document.getElementById('purchase-item-expiry').value || null;
@@ -6485,6 +6890,7 @@ function addPurchaseItem() {
         id: 'item_' + Date.now(),
         upc,
         product_name: name,
+        hsn_number: hsn,
         bought_qty: boughtQty,
         free_qty: freeQty,
         total_qty: totalQty,
@@ -6501,6 +6907,7 @@ function addPurchaseItem() {
     // Reset item form
     document.getElementById('purchase-item-upc').value = '';
     document.getElementById('purchase-item-name').value = '';
+    document.getElementById('purchase-item-hsn').value = '';
     document.getElementById('purchase-item-bought-qty').value = '1';
     document.getElementById('purchase-item-free-qty').value = '0';
     document.getElementById('purchase-item-expiry').value = '';
@@ -6537,7 +6944,7 @@ function renderPurchaseCart() {
             <div style="flex: 1;">
                 <div style="font-weight: 600;">${item.product_name}</div>
                 <div style="font-size: 0.8rem; color: var(--text-secondary);">
-                    UPC: ${item.upc || 'N/A'} | Qty: ${item.bought_qty} + ${item.free_qty} Free = ${item.total_qty}
+                    UPC: ${item.upc || 'N/A'}${item.hsn_number ? ' | HSN: ' + item.hsn_number : ''} | Qty: ${item.bought_qty} + ${item.free_qty} Free = ${item.total_qty}
                 </div>
             </div>
             <div style="text-align: right;">
@@ -6729,6 +7136,7 @@ async function savePurchaseSlip() {
             tenant_id: authState.owner.tenant_id,
             upc: i.upc || null,
             product_name: i.product_name,
+            hsn_number: i.hsn_number || null,
             bought_qty: i.bought_qty,
             free_qty: i.free_qty,
             total_qty: i.total_qty,
@@ -6762,9 +7170,11 @@ async function savePurchaseSlip() {
             if (matchedProduct) {
                 // Update existing product stock
                 const newStock = (matchedProduct.stock || 0) + item.total_qty;
+                const updatePayload = { stock: newStock };
+                if (item.hsn_number) updatePayload.hsn_number = item.hsn_number;
                 await supabase
                     .from('products')
-                    .update({ stock: newStock })
+                    .update(updatePayload)
                     .eq('id', matchedProduct.id);
             } else {
                 // Create new product
@@ -6774,10 +7184,14 @@ async function savePurchaseSlip() {
                         tenant_id: authState.owner.tenant_id,
                         name: item.product_name,
                         upc: item.upc,
+                        hsn_number: item.hsn_number || null,
                         price: item.selling_price,
                         stock: item.total_qty,
                         is_in_house: false
                     }]);
+            }
+            if (item.hsn_number) {
+                updateHsnCache(item.upc, item.product_name, item.hsn_number);
             }
         }
 
@@ -7218,6 +7632,8 @@ async function printPurchaseSlip(slipId) {
                 <table>
                     <thead>
                         <tr>
+                            <th>#</th>
+                            <th>HSN</th>
                             <th>Item</th>
                             <th>Qty</th>
                             <th>Free Qty</th>
@@ -7226,8 +7642,10 @@ async function printPurchaseSlip(slipId) {
                         </tr>
                     </thead>
                     <tbody>
-                        ${items.map(i => `
+                        ${items.map((i, idx) => `
                             <tr>
+                                <td>${idx + 1}</td>
+                                <td>${i.hsn_number || '-'}</td>
                                 <td>${i.product_name}</td>
                                 <td>${i.bought_qty}</td>
                                 <td>${i.free_qty}</td>

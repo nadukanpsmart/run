@@ -567,6 +567,10 @@
                                 <div id="purchase-name-suggestions" class="suggestions-dropdown hidden"></div>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
+                                <label>HSN No.</label>
+                                <input type="text" id="purchase-item-hsn" placeholder="HSN" list="store-hsn-list" autocomplete="off">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label>Bought Qty *</label>
                                 <input type="number" id="purchase-item-bought-qty" min="0" value="1" oninput="updatePurchaseItemCalc()">
                             </div>
@@ -1289,6 +1293,10 @@
                     <input type="text" id="p-upc" placeholder="Scan or enter barcode">
                 </div>
                 <div class="form-group">
+                    <label>HSN Number (Optional)</label>
+                    <input type="text" id="p-hsn" placeholder="e.g. 1905, 3004" list="store-hsn-list" autocomplete="off">
+                </div>
+                <div class="form-group">
                     <label>Stock</label>
                     <input type="number" id="p-stock" required min="0">
                 </div>
@@ -1341,6 +1349,10 @@
                 <div class="form-group">
                     <label>UPC / Barcode (Optional)</label>
                     <input type="text" id="edit-p-upc" placeholder="Scan or enter barcode">
+                </div>
+                <div class="form-group">
+                    <label>HSN Number (Optional)</label>
+                    <input type="text" id="edit-p-hsn" placeholder="e.g. 1905, 3004" list="store-hsn-list" autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label>Stock</label>
@@ -1506,10 +1518,11 @@
                             <tr style="background: var(--bg-body); border-bottom: 1px solid var(--border-color); text-align: left;">
                                 <th style="padding: 8px;">#</th>
                                 <th style="padding: 8px;">Item Name</th>
-                                <th style="padding: 8px; width: 120px;">Qty</th>
-                                <th style="padding: 8px; width: 110px;">Price (₹)</th>
-                                <th style="padding: 8px; width: 100px; text-align: right;">Total (₹)</th>
-                                <th style="padding: 8px; width: 60px; text-align: center;">Action</th>
+                                <th style="padding: 8px; width: 105px;">Qty</th>
+                                <th style="padding: 8px; width: 75px;">Free</th>
+                                <th style="padding: 8px; width: 105px;">Price (₹)</th>
+                                <th style="padding: 8px; width: 95px; text-align: right;">Total (₹)</th>
+                                <th style="padding: 8px; width: 55px; text-align: center;">Action</th>
                             </tr>
                         </thead>
                         <tbody id="edit-bill-items-body">
@@ -1626,6 +1639,10 @@
                             <label style="font-size: 0.75rem;">UPC</label>
                             <input type="text" id="edit-purchase-new-upc" placeholder="Barcode" autocomplete="off">
                             <div id="edit-purchase-upc-suggestions" class="suggestions-dropdown hidden"></div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.75rem;">HSN</label>
+                            <input type="text" id="edit-purchase-new-hsn" placeholder="HSN" list="store-hsn-list" autocomplete="off">
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <label style="font-size: 0.75rem;">Bought</label>
@@ -1820,6 +1837,9 @@
 
     <!-- Toast Notification (Global) -->
     <div id="toast-notification" class="hidden">Product Added!</div>
+
+    <!-- Store-wide HSN Suggestions Datalist -->
+    <datalist id="store-hsn-list"></datalist>
 
 
     <script src="config.js"></script>
